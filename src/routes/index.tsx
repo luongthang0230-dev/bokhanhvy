@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-import { Download, HardDrive, Monitor, PackageOpen, Tag } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Download, HardDrive, Heart, Monitor, PackageOpen, Tag } from "lucide-react";
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
 import { Button } from "@/components/ui/button";
@@ -12,8 +12,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { softwareQuery, registerDownload, formatNumber, youtubeEmbedUrl } from "@/lib/api";
+import { softwareQuery, registerDownload, setSoftwareLike, formatNumber, youtubeEmbedUrl } from "@/lib/api";
 import { useSettings } from "@/lib/settings";
+import { cn } from "@/lib/utils";
 import type { Software } from "@/lib/types";
 
 export const Route = createFileRoute("/")({
@@ -87,6 +88,19 @@ function HomePage() {
   );
 }
 
+function getLikedIds(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    return new Set(JSON.parse(window.localStorage.getItem("liked_software_ids") ?? "[]"));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveLikedIds(ids: Set<string>) {
+  window.localStorage.setItem("liked_software_ids", JSON.stringify([...ids]));
+}
+
 function SoftwareCard({ sw, index }: { sw: Software; index: number }) {
   const driveLink =
     sw.download_links?.find((l) => l.provider === "google-drive") ??
@@ -94,11 +108,31 @@ function SoftwareCard({ sw, index }: { sw: Software; index: number }) {
   const embed = youtubeEmbedUrl(sw.youtube_url);
   const [descOpen, setDescOpen] = useState(false);
   const hasDescription = !!sw.description?.trim();
+  const [liked, setLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(sw.likes ?? 0);
+
+  useEffect(() => {
+    setLiked(getLikedIds().has(sw.id));
+  }, [sw.id]);
 
   function handleDownload() {
     if (!driveLink) return;
     registerDownload(sw.id);
     window.open(driveLink.url, "_blank", "noopener,noreferrer");
+  }
+
+  function handleLike() {
+    const nextLiked = !liked;
+    setLiked(nextLiked);
+    setLikeCount((c) => Math.max(0, c + (nextLiked ? 1 : -1)));
+    const ids = getLikedIds();
+    if (nextLiked) ids.add(sw.id);
+    else ids.delete(sw.id);
+    saveLikedIds(ids);
+    setSoftwareLike(sw.id, nextLiked).catch(() => {
+      // lỗi mạng tạm thời: giữ nguyên trạng thái đã bấm trên UI, không rollback
+      // để tránh giật lại gây khó chịu — lần tải trang sau sẽ tự đồng bộ lại.
+    });
   }
 
   return (
@@ -158,7 +192,19 @@ function SoftwareCard({ sw, index }: { sw: Software; index: number }) {
         </button>
       )}
 
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <button
+          type="button"
+          onClick={handleLike}
+          aria-label={liked ? "Bỏ thích" : "Thích phần mềm này"}
+          aria-pressed={liked}
+          className={cn(
+            "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 transition-colors hover:bg-secondary",
+            liked && "text-rose-500",
+          )}
+        >
+          <Heart className={cn("h-3.5 w-3.5", liked && "fill-rose-500")} /> {formatNumber(likeCount)}
+        </button>
         {sw.version && (
           <span className="inline-flex items-center gap-1">
             <Tag className="h-3.5 w-3.5" /> v{sw.version}

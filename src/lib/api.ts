@@ -132,6 +132,16 @@ export async function registerDownload(softwareId: string) {
   await supabase.rpc("register_download", { _software_id: softwareId });
 }
 
+/** Thả tim / bỏ tim cho 1 phần mềm, trả về số tim mới. Không cần đăng nhập. */
+export async function setSoftwareLike(softwareId: string, liked: boolean): Promise<number> {
+  const { data, error } = await supabase.rpc("set_software_like", {
+    _software_id: softwareId,
+    _liked: liked,
+  });
+  if (error) throw error;
+  return data as number;
+}
+
 export function youtubeEmbedUrl(url?: string | null): string | null {
   if (!url) return null;
   const m =

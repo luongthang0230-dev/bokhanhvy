@@ -335,6 +335,7 @@ export type Database = {
           is_new: boolean
           kind: string
           license: string | null
+          likes: number
           name: string
           os: string | null
           published: boolean
@@ -364,6 +365,7 @@ export type Database = {
           is_new?: boolean
           kind?: string
           license?: string | null
+          likes?: number
           name: string
           os?: string | null
           published?: boolean
@@ -393,6 +395,7 @@ export type Database = {
           is_new?: boolean
           kind?: string
           license?: string | null
+          likes?: number
           name?: string
           os?: string | null
           published?: boolean
@@ -449,6 +452,10 @@ export type Database = {
         Returns: boolean
       }
       register_download: { Args: { _software_id: string }; Returns: undefined }
+      set_software_like: {
+        Args: { _liked: boolean; _software_id: string }
+        Returns: number
+      }
     }
     Enums: {
       app_role: "admin" | "editor" | "user"

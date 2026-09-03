@@ -40,6 +40,7 @@ export type Software = {
   published: boolean;
   sort_order: number;
   downloads: number;
+  likes: number;
   seo_title: string | null;
   seo_description: string | null;
   released_at: string | null;
