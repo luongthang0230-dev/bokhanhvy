@@ -1,33 +1,14 @@
 import { useState } from "react";
-import { Gift, Minus, Copy, Check } from "lucide-react";
-import { toast } from "sonner";
-
-const BANK_INFO = {
-  bankName: "VietinBank",
-  alias: "0917969587",
-  accountNumber: "104867182645",
-  accountHolder: "Lương Quốc Thắng",
-};
+import { Gift, Minus } from "lucide-react";
 
 /**
  * Khung "Ủng hộ" nổi góc dưới trái, mặc định hiển thị sẵn (không phải dạng
  * bong bóng thu gọn). Có nút "-" để thu nhỏ lại thành 1 nút tròn, bấm lại
- * nút đó để mở ra như ban đầu.
+ * nút đó để mở ra như ban đầu. Mọi thông tin chuyển khoản đã có sẵn trong
+ * chính ảnh QR nên không lặp lại text bên dưới, giữ khung gọn.
  */
 export function DonateWidget() {
   const [open, setOpen] = useState(true);
-  const [copied, setCopied] = useState(false);
-
-  async function handleCopy() {
-    try {
-      await navigator.clipboard.writeText(BANK_INFO.accountNumber);
-      setCopied(true);
-      toast.success("Đã copy số tài khoản");
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      toast.error("Không copy được, bạn tự chép giúp mình nhé");
-    }
-  }
 
   if (!open) {
     return (
@@ -59,19 +40,13 @@ export function DonateWidget() {
           <Minus className="h-5 w-5" />
         </button>
       </div>
-      <div className="flex flex-col items-center gap-3 p-5">
+      <div className="p-4">
         <div className="w-full overflow-hidden rounded-2xl shadow-sm">
           <img
             src="/donate-qr.jpg"
             alt="Mã QR donate qua VietinBank"
             className="block w-full scale-[1.03]"
           />
-        </div>
-        <p className="text-center text-sm text-muted-foreground">
-          Quét mã QR bằng app ngân hàng bất kỳ
-
-            </button>
-          </div>
         </div>
       </div>
     </div>
