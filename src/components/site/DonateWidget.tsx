@@ -68,7 +68,7 @@ export function DonateWidget() {
           />
         </div>
         <p className="text-center text-sm text-muted-foreground">
-          Quét mã bằng app ngân hàng bất kỳ (VietQR)
+          Quét mã QR bằng app ngân hàng bất kỳ
         </p>
         <div className="mt-1 w-full space-y-1.5 rounded-lg bg-secondary/50 p-3 text-sm">
           <p className="flex justify-between gap-2">
