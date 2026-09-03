@@ -60,11 +60,13 @@ export function DonateWidget() {
         </button>
       </div>
       <div className="flex flex-col items-center gap-3 p-5">
-        <img
-          src="/donate-qr.jpg"
-          alt="Mã QR donate qua VietinBank"
-          className="w-full rounded-lg border border-border"
-        />
+        <div className="w-full overflow-hidden rounded-2xl shadow-sm">
+          <img
+            src="/donate-qr.jpg"
+            alt="Mã QR donate qua VietinBank"
+            className="block w-full scale-[1.03]"
+          />
+        </div>
         <p className="text-center text-sm text-muted-foreground">
           Quét mã bằng app ngân hàng bất kỳ (VietQR)
         </p>
