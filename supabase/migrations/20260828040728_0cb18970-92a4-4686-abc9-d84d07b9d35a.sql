@@ -1,0 +1,1 @@
+ALTER TABLE public.software ADD COLUMN IF NOT EXISTS youtube_url text DEFAULT ''::text;
