@@ -69,26 +69,7 @@ export function DonateWidget() {
         </div>
         <p className="text-center text-sm text-muted-foreground">
           Quét mã QR bằng app ngân hàng bất kỳ
-        </p>
-        <div className="mt-1 w-full space-y-1.5 rounded-lg bg-secondary/50 p-3 text-sm">
-          <p className="flex justify-between gap-2">
-            <span className="text-muted-foreground">Ngân hàng</span>
-            <span className="font-medium">{BANK_INFO.bankName}</span>
-          </p>
-          <p className="flex justify-between gap-2">
-            <span className="text-muted-foreground">Chủ TK</span>
-            <span className="font-medium">{BANK_INFO.accountHolder}</span>
-          </p>
-          <div className="flex items-center justify-between gap-2 pt-1">
-            <span className="truncate font-mono font-medium">{BANK_INFO.accountNumber}</span>
-            <button
-              type="button"
-              onClick={handleCopy}
-              aria-label="Copy số tài khoản"
-              className="flex shrink-0 items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-sm font-medium hover:bg-secondary"
-            >
-              {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-              {copied ? "Đã copy" : "Copy"}
+
             </button>
           </div>
         </div>
