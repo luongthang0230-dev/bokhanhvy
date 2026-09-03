@@ -45,10 +45,10 @@ export function DonateWidget() {
   }
 
   return (
-    <div className="fixed bottom-6 left-6 z-40 w-72 max-w-[calc(100vw-3rem)] overflow-hidden rounded-2xl border border-border bg-background shadow-2xl">
-      <div className="flex items-center justify-between bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2.5 text-white">
-        <p className="flex items-center gap-1.5 text-sm font-semibold">
-          <Gift className="h-4 w-4" /> Ủng hộ tác giả
+    <div className="fixed bottom-6 left-6 z-40 w-96 max-w-[calc(100vw-3rem)] overflow-hidden rounded-2xl border border-border bg-background shadow-2xl">
+      <div className="flex items-center justify-between bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-3 text-white">
+        <p className="flex items-center gap-1.5 text-base font-semibold">
+          <Gift className="h-5 w-5" /> Ủng hộ tác giả
         </p>
         <button
           type="button"
@@ -56,19 +56,19 @@ export function DonateWidget() {
           aria-label="Thu nhỏ"
           className="rounded-full p-1 hover:bg-white/20"
         >
-          <Minus className="h-4 w-4" />
+          <Minus className="h-5 w-5" />
         </button>
       </div>
-      <div className="flex flex-col items-center gap-2 p-4">
+      <div className="flex flex-col items-center gap-3 p-5">
         <img
           src="/donate-qr.jpg"
           alt="Mã QR donate qua VietinBank"
-          className="w-52 rounded-lg border border-border"
+          className="w-full rounded-lg border border-border"
         />
-        <p className="text-center text-xs text-muted-foreground">
+        <p className="text-center text-sm text-muted-foreground">
           Quét mã bằng app ngân hàng bất kỳ (VietQR)
         </p>
-        <div className="mt-1 w-full space-y-1 rounded-lg bg-secondary/50 p-3 text-xs">
+        <div className="mt-1 w-full space-y-1.5 rounded-lg bg-secondary/50 p-3 text-sm">
           <p className="flex justify-between gap-2">
             <span className="text-muted-foreground">Ngân hàng</span>
             <span className="font-medium">{BANK_INFO.bankName}</span>
@@ -83,9 +83,9 @@ export function DonateWidget() {
               type="button"
               onClick={handleCopy}
               aria-label="Copy số tài khoản"
-              className="flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium hover:bg-secondary"
+              className="flex shrink-0 items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-sm font-medium hover:bg-secondary"
             >
-              {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+              {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               {copied ? "Đã copy" : "Copy"}
             </button>
           </div>
