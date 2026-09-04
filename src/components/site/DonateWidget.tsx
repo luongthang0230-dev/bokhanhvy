@@ -2,19 +2,25 @@ import { useEffect, useState } from "react";
 import { Gift, Minus } from "lucide-react";
 
 /**
- * Khung "Ủng hộ" nổi góc dưới trái. Trên màn hình rộng (máy tính) mặc định
- * hiển thị sẵn dạng mở. Trên màn hình hẹp (điện thoại) mặc định thu gọn
- * thành nút tròn để không che mất nội dung chính — người dùng tự bấm mở
- * nếu muốn. Có nút "-" để thu nhỏ lại bất kỳ lúc nào, bấm nút tròn để mở
- * lại. Khung cũng tự giới hạn chiều cao theo màn hình, cuộn được nếu cần,
- * để không bao giờ bị tràn ra ngoài trên các màn hình thấp.
+ * Khung "Ủng hộ" nổi góc dưới trái.
+ * - Điện thoại (theo loại thiết bị, không phải theo độ rộng cửa sổ): mặc
+ *   định thu gọn thành nút tròn, tránh che nội dung trên màn hình nhỏ.
+ * - Máy tính: luôn hiển thị sẵn dạng khung mở, nhưng bề rộng co giãn theo
+ *   % chiều rộng màn hình (không cố định px) nên tự nhỏ lại ở màn hình
+ *   phân giải thấp / cửa sổ bị thu nhỏ, không đè lên nội dung bên cạnh.
+ * Có nút "-" để thu nhỏ lại bất kỳ lúc nào, bấm nút tròn để mở lại.
  */
 export function DonateWidget() {
   const [open, setOpen] = useState(true);
 
   useEffect(() => {
-    // Màn hình hẹp (điện thoại) -> mặc định thu gọn để tránh che nội dung.
-    if (window.matchMedia("(max-width: 640px)").matches) setOpen(false);
+    // Nhận diện THIẾT BỊ điện thoại (không phải độ rộng cửa sổ) — để dù
+    // người dùng resize cửa sổ máy tính nhỏ lại, khung vẫn không tự thu
+    // gọn thành bong bóng như trên điện thoại thật.
+    const isPhone = /Android|iPhone|iPod|Windows Phone|Mobile(?!.*iPad)/i.test(
+      navigator.userAgent,
+    );
+    if (isPhone) setOpen(false);
   }, []);
 
   if (!open) {
@@ -33,7 +39,7 @@ export function DonateWidget() {
   }
 
   return (
-    <div className="fixed bottom-6 left-6 z-40 flex max-h-[calc(100vh-3rem)] w-96 max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl">
+    <div className="fixed bottom-6 left-6 z-40 flex max-h-[calc(100vh-3rem)] w-[clamp(200px,22vw,384px)] flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl">
       <div className="flex shrink-0 items-center justify-between bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-3 text-white">
         <p className="flex items-center gap-1.5 text-base font-semibold">
           <Gift className="h-5 w-5" /> Ủng hộ tác giả
