@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Download, HardDrive, Heart, Monitor, PackageOpen, Tag } from "lucide-react";
+import { Download, HardDrive, Heart, Monitor, PackageOpen, Pin, Tag } from "lucide-react";
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import {
 import { softwareQuery, registerDownload, setSoftwareLike, formatNumber, youtubeEmbedUrl } from "@/lib/api";
 import { useSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import type { Software } from "@/lib/types";
 
 export const Route = createFileRoute("/")({
@@ -123,15 +124,27 @@ function SoftwareCard({ sw, index }: { sw: Software; index: number }) {
 
   function handleLike() {
     const nextLiked = !liked;
+    const ids = getLikedIds();
     setLiked(nextLiked);
     setLikeCount((c) => Math.max(0, c + (nextLiked ? 1 : -1)));
-    const ids = getLikedIds();
     if (nextLiked) ids.add(sw.id);
     else ids.delete(sw.id);
     saveLikedIds(ids);
-    setSoftwareLike(sw.id, nextLiked).catch(() => {
-      // lỗi mạng tạm thời: giữ nguyên trạng thái đã bấm trên UI, không rollback
-      // để tránh giật lại gây khó chịu — lần tải trang sau sẽ tự đồng bộ lại.
+
+    setSoftwareLike(sw.id, nextLiked).catch((err) => {
+      // Lưu thất bại (thường do chưa chạy LIKES_SETUP.sql trên Supabase) —
+      // hoàn tác lại UI + báo lỗi rõ ràng thay vì để tim "giả" không lưu được.
+      setLiked(!nextLiked);
+      setLikeCount((c) => Math.max(0, c + (nextLiked ? -1 : 1)));
+      const revertedIds = getLikedIds();
+      if (nextLiked) revertedIds.delete(sw.id);
+      else revertedIds.add(sw.id);
+      saveLikedIds(revertedIds);
+      toast.error(
+        err instanceof Error && /function|does not exist|relation/i.test(err.message)
+          ? "Chưa lưu được lượt thích — có thể chưa chạy LIKES_SETUP.sql trên Supabase."
+          : "Không lưu được lượt thích, thử lại sau.",
+      );
     });
   }
 
@@ -154,7 +167,12 @@ function SoftwareCard({ sw, index }: { sw: Software; index: number }) {
             />
           </div>
           <div className="min-w-0">
-            <h2 className="font-display text-lg font-semibold leading-tight">{sw.name}</h2>
+            <h2 className="flex items-center gap-1.5 font-display text-lg font-semibold leading-tight">
+              {sw.is_pinned && (
+                <Pin className="h-4 w-4 shrink-0 fill-primary text-primary" aria-label="Đã ghim" />
+              )}
+              {sw.name}
+            </h2>
             {sw.tagline && (
               <p className="mt-1 whitespace-pre-line text-sm text-muted-foreground">{sw.tagline}</p>
             )}
@@ -169,7 +187,12 @@ function SoftwareCard({ sw, index }: { sw: Software; index: number }) {
             loading="lazy"
           />
           <div className="min-w-0">
-            <h2 className="font-display text-lg font-semibold leading-tight">{sw.name}</h2>
+            <h2 className="flex items-center gap-1.5 font-display text-lg font-semibold leading-tight">
+              {sw.is_pinned && (
+                <Pin className="h-4 w-4 shrink-0 fill-primary text-primary" aria-label="Đã ghim" />
+              )}
+              {sw.name}
+            </h2>
             {sw.tagline && (
               <p className="mt-0.5 whitespace-pre-line text-sm text-muted-foreground">{sw.tagline}</p>
             )}

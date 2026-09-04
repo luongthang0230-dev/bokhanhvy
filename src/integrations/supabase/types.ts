@@ -333,6 +333,7 @@ export type Database = {
           install_guide: string | null
           is_featured: boolean
           is_new: boolean
+          is_pinned: boolean
           kind: string
           license: string | null
           likes: number
@@ -363,6 +364,7 @@ export type Database = {
           install_guide?: string | null
           is_featured?: boolean
           is_new?: boolean
+          is_pinned?: boolean
           kind?: string
           license?: string | null
           likes?: number
@@ -393,6 +395,7 @@ export type Database = {
           install_guide?: string | null
           is_featured?: boolean
           is_new?: boolean
+          is_pinned?: boolean
           kind?: string
           license?: string | null
           likes?: number

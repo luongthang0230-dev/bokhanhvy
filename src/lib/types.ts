@@ -37,6 +37,7 @@ export type Software = {
   category_id: string | null;
   is_featured: boolean;
   is_new: boolean;
+  is_pinned: boolean;
   published: boolean;
   sort_order: number;
   downloads: number;

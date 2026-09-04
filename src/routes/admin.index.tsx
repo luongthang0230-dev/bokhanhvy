@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { z } from "zod";
-import { LogOut, Pencil, Plus, Trash2, ExternalLink, MessageCircle, Package } from "lucide-react";
+import { LogOut, Pencil, Plus, Trash2, ExternalLink, MessageCircle, Package, Pin, PinOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAdminAuth } from "@/lib/use-admin";
 import { softwareQuery, formatNumber } from "@/lib/api";
@@ -197,6 +197,23 @@ function AdminPage() {
     }
   }
 
+  async function togglePin(sw: Software) {
+    const { error } = await supabase
+      .from("software")
+      .update({ is_pinned: !sw.is_pinned })
+      .eq("id", sw.id);
+    if (error) {
+      toast.error(
+        /column|does not exist/i.test(error.message)
+          ? "Chưa chạy PIN_SETUP.sql trên Supabase."
+          : error.message,
+      );
+    } else {
+      toast.success(sw.is_pinned ? "Đã bỏ ghim" : "Đã ghim lên đầu");
+      queryClient.invalidateQueries({ queryKey: ["software"] });
+    }
+  }
+
   async function logout() {
     await supabase.auth.signOut();
     navigate({ to: "/admin/login" });
@@ -280,19 +297,31 @@ function AdminPage() {
             ) : (
               <ul className="space-y-3">
                 {data?.map((sw) => (
-                  <li key={sw.id} className="card-surface flex items-center gap-4 p-4">
+                  <li key={sw.id} className={cn("card-surface flex items-center gap-4 p-4", sw.is_pinned && "border-primary/50 bg-primary/5")}>
                     <img
                       src={sw.icon_url || `https://api.dicebear.com/9.x/shapes/svg?seed=${sw.slug}`}
                       alt=""
                       className="h-12 w-12 rounded-xl border border-border"
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-semibold">{sw.name}</p>
+                      <p className="flex items-center gap-1.5 truncate font-semibold">
+                        {sw.is_pinned && <Pin className="h-3.5 w-3.5 shrink-0 fill-primary text-primary" />}
+                        {sw.name}
+                      </p>
                       <p className="truncate text-sm text-muted-foreground">
                         {sw.version && `v${sw.version} · `}
                         {formatNumber(sw.downloads)} lượt tải
                       </p>
                     </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => togglePin(sw)}
+                      title={sw.is_pinned ? "Bỏ ghim" : "Ghim lên đầu"}
+                    >
+                      {sw.is_pinned ? <PinOff className="mr-1 h-4 w-4" /> : <Pin className="mr-1 h-4 w-4" />}
+                      {sw.is_pinned ? "Bỏ ghim" : "Ghim"}
+                    </Button>
                     <Button variant="outline" size="sm" onClick={() => startEdit(sw)}>
                       <Pencil className="mr-1 h-4 w-4" /> Sửa
                     </Button>

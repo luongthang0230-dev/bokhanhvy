@@ -106,6 +106,10 @@ export function softwareQuery(filter: SoftwareFilter = {}) {
       const { data, error } = await q;
       if (error) throw error;
       let rows = (data ?? []) as unknown as Software[];
+      // Ghim: dù đang xếp theo kiểu nào (mặc định / phổ biến / mới nhất),
+      // phần mềm được ghim luôn đứng trước — sort ổn định nên thứ tự còn lại
+      // giữ nguyên như truy vấn gốc, chỉ đẩy các mục ghim lên đầu.
+      rows = [...rows].sort((a, b) => Number(b.is_pinned) - Number(a.is_pinned));
       if (filter.categorySlug)
         rows = rows.filter((r) => r.categories?.slug === filter.categorySlug);
       return rows;
