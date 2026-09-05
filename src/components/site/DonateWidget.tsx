@@ -25,7 +25,7 @@ export function DonateWidget() {
 
   if (!open) {
     return (
-      <div className="fixed bottom-6 left-6 z-40">
+      <div className="fixed bottom-28 right-6 z-40">
         <button
           type="button"
           onClick={() => setOpen(true)}
@@ -39,7 +39,7 @@ export function DonateWidget() {
   }
 
   return (
-    <div className="fixed bottom-6 left-6 z-40 flex max-h-[calc(100vh-3rem)] w-[clamp(200px,22vw,384px)] flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl">
+    <div className="fixed bottom-28 right-6 z-40 flex max-h-[calc(100vh-9rem)] w-[clamp(200px,22vw,384px)] flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl">
       <div className="flex shrink-0 items-center justify-between bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-3 text-white">
         <p className="flex items-center gap-1.5 text-base font-semibold">
           <Gift className="h-5 w-5" /> Ủng hộ tác giả

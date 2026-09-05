@@ -118,9 +118,9 @@ export function FeedbackWidget() {
   }
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+    <div className="fixed bottom-8 right-6 z-50 flex flex-col items-end gap-3">
       {open && (
-        <div className="flex h-[28rem] w-[22rem] max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl">
+        <div className="flex h-[28rem] w-[22rem] max-w-[calc(100vw-3rem)] max-h-[calc(100vh-6rem)] flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl">
           <div className="brand-gradient flex items-center justify-between px-4 py-3 text-primary-foreground">
             <div>
               <p className="font-display text-sm font-semibold">Góp ý cho chúng tôi</p>
