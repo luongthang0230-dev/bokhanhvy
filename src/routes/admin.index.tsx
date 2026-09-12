@@ -2,12 +2,13 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { z } from "zod";
-import { LogOut, Pencil, Plus, Trash2, ExternalLink, MessageCircle, Package, Pin, PinOff } from "lucide-react";
+import { LogOut, Pencil, Plus, Trash2, ExternalLink, MessageCircle, Package, Pin, PinOff, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAdminAuth } from "@/lib/use-admin";
 import { softwareQuery, formatNumber } from "@/lib/api";
 import { subscribeToConversations, fetchConversations } from "@/lib/feedback-api";
 import { AdminFeedbackInbox } from "@/components/site/AdminFeedbackInbox";
+import { AdminPayrollUsers } from "@/components/site/AdminPayrollUsers";
 import type { Software } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -84,7 +85,7 @@ function AdminPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState<"software" | "feedback">("software");
+  const [tab, setTab] = useState<"software" | "feedback" | "payroll-users">("software");
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
@@ -268,10 +269,24 @@ function AdminPage() {
               </span>
             )}
           </button>
+          <button
+            type="button"
+            onClick={() => setTab("payroll-users")}
+            className={cn(
+              "flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors",
+              tab === "payroll-users"
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <Users className="h-4 w-4" /> Người dùng Tính lương
+          </button>
         </div>
 
         {tab === "feedback" ? (
           <AdminFeedbackInbox />
+        ) : tab === "payroll-users" ? (
+          <AdminPayrollUsers />
         ) : (
           <>
             <div className="mb-6 flex items-center justify-between">

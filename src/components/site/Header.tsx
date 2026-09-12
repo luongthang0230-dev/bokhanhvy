@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { useSettings } from "@/lib/settings";
 
 /** "Lương Thắng" -> "LT", "DevKho" -> "DE". Falls back to a 2-char slice for single-word names. */
@@ -14,9 +14,18 @@ function siteInitials(name: string): string {
 
 export function Header() {
   const { settings } = useSettings();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+
+  const navLinkClass = (active: boolean) =>
+    `rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+      active
+        ? "bg-primary text-primary-foreground"
+        : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+    }`;
+
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 max-w-4xl items-center px-4">
+      <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-4">
         <Link to="/" className="flex items-center gap-2.5">
           {settings.logoUrl ? (
             <img src={settings.logoUrl} alt={settings.siteName} className="h-8 w-auto" />
@@ -29,6 +38,14 @@ export function Header() {
             {settings.siteName}
           </span>
         </Link>
+        <nav className="flex items-center gap-1 rounded-full border border-border bg-secondary/40 p-1">
+          <Link to="/" className={navLinkClass(pathname === "/")}>
+            Trang chủ
+          </Link>
+          <Link to="/tinhluong" className={navLinkClass(pathname.startsWith("/tinhluong"))}>
+            Tính lương
+          </Link>
+        </nav>
       </div>
     </header>
   );

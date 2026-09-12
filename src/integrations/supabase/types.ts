@@ -209,6 +209,69 @@ export type Database = {
           },
         ]
       }
+      payroll_history: {
+        Row: {
+          id: string
+          input: Json
+          ma_sj: string
+          nam: number
+          result: Json
+          saved_at: string
+          thang: number
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          input: Json
+          ma_sj: string
+          nam: number
+          result: Json
+          saved_at?: string
+          thang: number
+          user_id: string
+        }
+        Update: {
+          id?: string
+          input?: Json
+          ma_sj?: string
+          nam?: number
+          result?: Json
+          saved_at?: string
+          thang?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      payroll_sj_records: {
+        Row: {
+          ca_config: Json
+          config: Json
+          id: string
+          ma_sj: string
+          timesheet: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ca_config?: Json
+          config?: Json
+          id?: string
+          ma_sj: string
+          timesheet?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ca_config?: Json
+          config?: Json
+          id?: string
+          ma_sj?: string
+          timesheet?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       home_sections: {
         Row: {
           enabled: boolean
