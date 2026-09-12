@@ -3,7 +3,7 @@
 // website. Mục tiêu: trang vẫn MỞ ĐƯỢC khi mất mạng (dùng bản đã cache lần
 // trước), dữ liệu thật (mã SJ, bảng lương...) do lớp payroll-storage.ts tự
 // lưu cache riêng trong localStorage, KHÔNG cache ở đây.
-const CACHE_NAME = "tinhluong-shell-v1";
+const CACHE_NAME = "tinhluong-shell-v2";
 const OFFLINE_URL = "/tinhluong";
 
 self.addEventListener("install", (event) => {
@@ -46,7 +46,14 @@ self.addEventListener("fetch", (event) => {
     caches.match(req).then((cached) => {
       const network = fetch(req)
         .then((res) => {
-          if (res.ok) caches.open(CACHE_NAME).then((c) => c.put(req, res.clone()));
+          // QUAN TRỌNG: phải clone() NGAY LẬP TỨC, trước khi trả `res` về
+          // cho trình duyệt tiêu thụ — clone() muộn (vd trong .then() của
+          // caches.open()) sẽ ăn lỗi "Response body is already used" và
+          // làm hỏng cả request đó (khiến JS không load được, trang treo).
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(req, copy));
+          }
           return res;
         })
         .catch(() => cached);
