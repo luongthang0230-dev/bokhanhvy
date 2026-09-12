@@ -13,7 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as TinhluongRouteImport } from './routes/tinhluong'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminLoginRouteImport } from './routes/admin.login'
-import { Route as TinhluongLoginRouteImport } from './routes/tinhluong.login'
+import { Route as TinhluongLoginRouteImport } from './routes/tinhluong_.login'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -36,21 +36,21 @@ const AdminLoginRoute = AdminLoginRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const TinhluongLoginRoute = TinhluongLoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => TinhluongRoute,
+  id: '/tinhluong/login',
+  path: '/tinhluong/login',
+  getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/tinhluong': typeof TinhluongRouteWithChildren
+  '/tinhluong': typeof TinhluongRoute
   '/admin/login': typeof AdminLoginRoute
   '/tinhluong/login': typeof TinhluongLoginRoute
   '/admin/': typeof AdminIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/tinhluong': typeof TinhluongRouteWithChildren
+  '/tinhluong': typeof TinhluongRoute
   '/admin/login': typeof AdminLoginRoute
   '/tinhluong/login': typeof TinhluongLoginRoute
   '/admin': typeof AdminIndexRoute
@@ -58,7 +58,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/tinhluong': typeof TinhluongRouteWithChildren
+  '/tinhluong': typeof TinhluongRoute
   '/admin/login': typeof AdminLoginRoute
   '/tinhluong/login': typeof TinhluongLoginRoute
   '/admin/': typeof AdminIndexRoute
@@ -80,9 +80,10 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  TinhluongRoute: typeof TinhluongRouteWithChildren
+  TinhluongRoute: typeof TinhluongRoute
   AdminLoginRoute: typeof AdminLoginRoute
   AdminIndexRoute: typeof AdminIndexRoute
+  TinhluongLoginRoute: typeof TinhluongLoginRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -117,31 +118,20 @@ declare module '@tanstack/react-router' {
     }
     '/tinhluong/login': {
       id: '/tinhluong/login'
-      path: '/login'
+      path: '/tinhluong/login'
       fullPath: '/tinhluong/login'
       preLoaderRoute: typeof TinhluongLoginRouteImport
-      parentRoute: typeof TinhluongRoute
+      parentRoute: typeof rootRouteImport
     }
   }
 }
 
-interface TinhluongRouteChildren {
-  TinhluongLoginRoute: typeof TinhluongLoginRoute
-}
-
-const TinhluongRouteChildren: TinhluongRouteChildren = {
-  TinhluongLoginRoute: TinhluongLoginRoute,
-}
-
-const TinhluongRouteWithChildren = TinhluongRoute._addFileChildren(
-  TinhluongRouteChildren,
-)
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  TinhluongRoute: TinhluongRouteWithChildren,
+  TinhluongRoute: TinhluongRoute,
   AdminLoginRoute: AdminLoginRoute,
   AdminIndexRoute: AdminIndexRoute,
+  TinhluongLoginRoute: TinhluongLoginRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
