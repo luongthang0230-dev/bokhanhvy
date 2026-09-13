@@ -209,6 +209,48 @@ export type Database = {
           },
         ]
       }
+      payroll_thang_luong: {
+        Row: {
+          a: number
+          b: number
+          bac_luong: string
+          c: number
+          created_at: string
+          d: number
+          e: number
+          id: string
+          lcb: number
+          loai: string
+          thu_tu: number
+        }
+        Insert: {
+          a?: number
+          b?: number
+          bac_luong: string
+          c?: number
+          created_at?: string
+          d?: number
+          e?: number
+          id?: string
+          lcb: number
+          loai: string
+          thu_tu: number
+        }
+        Update: {
+          a?: number
+          b?: number
+          bac_luong?: string
+          c?: number
+          created_at?: string
+          d?: number
+          e?: number
+          id?: string
+          lcb?: number
+          loai?: string
+          thu_tu?: number
+        }
+        Relationships: []
+      }
       payroll_history: {
         Row: {
           id: string
@@ -518,6 +560,7 @@ export type Database = {
         Returns: boolean
       }
       register_download: { Args: { _software_id: string }; Returns: undefined }
+      replace_payroll_thang_luong: { Args: { _rows: Json }; Returns: number }
       set_software_like: {
         Args: { _liked: boolean; _software_id: string }
         Returns: number

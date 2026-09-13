@@ -8,7 +8,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -16,6 +16,7 @@ import { ThemeApplier } from "@/lib/settings";
 import { Toaster } from "@/components/ui/sonner";
 import { FeedbackWidget } from "@/components/site/FeedbackWidget";
 import { DonateWidget } from "@/components/site/DonateWidget";
+import { isMobileDevice } from "@/lib/is-mobile-device";
 
 function NotFoundComponent() {
   return (
@@ -132,6 +133,16 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isAdminRoute = pathname.startsWith("/admin");
+  const isTinhLuongRoute = pathname.startsWith("/tinhluong");
+
+  // Trên /tinhluong, ẩn bong bóng donate + chat admin khi mở bằng điện
+  // thoại (Android/iOS) để không chiếm chỗ trên màn hình nhỏ khi làm việc
+  // — vẫn hiện bình thường trên máy tính, và hiện bình thường ở các trang
+  // khác kể cả trên điện thoại.
+  const [hideWidgetsMobile, setHideWidgetsMobile] = useState(false);
+  useEffect(() => {
+    setHideWidgetsMobile(isTinhLuongRoute && isMobileDevice());
+  }, [isTinhLuongRoute]);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -139,8 +150,9 @@ function RootComponent() {
       <Toaster richColors position="top-center" />
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
-      {/* Bong bóng góp ý + ủng hộ chỉ hiện ở trang công khai, không hiện trong khu vực quản trị. */}
-      {!isAdminRoute && (
+      {/* Bong bóng góp ý + ủng hộ chỉ hiện ở trang công khai, không hiện trong khu vực quản trị,
+          và ẩn trên /tinhluong khi dùng điện thoại. */}
+      {!isAdminRoute && !hideWidgetsMobile && (
         <>
           <FeedbackWidget />
           <DonateWidget />

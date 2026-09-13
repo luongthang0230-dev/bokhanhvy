@@ -452,7 +452,9 @@ export function classifyDay(
 }
 
 /** 1 ô chấm công: [hc, tc, gg?] — hc có thể là số giờ, hoặc chuỗi "PN"/"PN 1/2"/"NL". */
-export type TimesheetCell = [number | string, number, number] | [number | string, number];
+export type TimesheetCell =
+  | [number | string, number | string, number | string]
+  | [number | string, number | string];
 export type TimesheetEntries = Record<number, TimesheetCell>;
 
 export function aggregateMonth(
@@ -467,11 +469,11 @@ export function aggregateMonth(
     const day = Number(dayStr);
     const value = entries[day];
     if (!value) continue;
-    let hc: number | string, tc: number, gg: number;
+    let hc: number | string, tc: number | string, gg: number | string;
     if (value.length >= 3) {
-      [hc, tc, gg] = value as [number | string, number, number];
+      [hc, tc, gg] = value as [number | string, number | string, number | string];
     } else {
-      [hc, tc] = value as [number | string, number];
+      [hc, tc] = value as [number | string, number | string];
       gg = 0;
     }
 
@@ -486,9 +488,11 @@ export function aggregateMonth(
       continue;
     }
 
-    const hcVal = typeof hc === "number" ? hc : parseFloat(hc || "0");
-    const tcVal = typeof tc === "number" ? tc : parseFloat(String(tc || "0"));
-    const ggVal = typeof gg === "number" ? gg : parseFloat(String(gg || "0"));
+    // Chấp nhận cả dấu ',' lẫn '.' làm dấu thập phân (bàn phím số của
+    // Windows tiếng Việt hay gõ ra ',' khi bấm phím thập phân).
+    const hcVal = typeof hc === "number" ? hc : parseFloat(String(hc || "0").replace(",", "."));
+    const tcVal = typeof tc === "number" ? tc : parseFloat(String(tc || "0").replace(",", "."));
+    const ggVal = typeof gg === "number" ? gg : parseFloat(String(gg || "0").replace(",", "."));
     if (!isFinite(hcVal) || !isFinite(tcVal) || !isFinite(ggVal)) continue;
     if (day < 1 || day > 31) continue;
     const d = new Date(Date.UTC(year, month - 1, day));
@@ -513,7 +517,7 @@ export function tinhGioThieuChuyenCan(entries: TimesheetEntries, _year: number, 
     const hc = value.length >= 1 ? value[0] : 0;
     const [pn] = isPn(hc);
     if (pn || isNl(hc)) continue;
-    const hcVal = typeof hc === "number" ? hc : parseFloat(hc || "0");
+    const hcVal = typeof hc === "number" ? hc : parseFloat(String(hc || "0").replace(",", "."));
     if (!isFinite(hcVal)) continue;
     if (hcVal > 0 && hcVal < 8) thieu += 8 - hcVal;
   }

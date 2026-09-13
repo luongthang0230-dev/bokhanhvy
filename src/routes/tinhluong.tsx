@@ -33,12 +33,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { usePayrollAuth, usePayrollAuthRefresh } from "@/lib/use-payroll-auth";
 import { payrollLogin, payrollRegister } from "@/lib/payroll-auth-server";
 import { usePwa } from "@/lib/use-pwa";
+import { fetchThangLuongOptions, type ThangLuongOptions } from "@/lib/thang-luong-api";
 import {
   emptyPayrollInput,
   tinhLuong,
   aggregateMonth,
   tinhGioThieuChuyenCan,
   resolveCa,
+  classifyDate,
+  parseNumber,
   CA_NGAY,
   CA_DEM,
   CA_CHUYEN_NGAY,
@@ -162,6 +165,134 @@ function ResultRow({ label, value }: { label: string; value: number }) {
 }
 
 // ============================================================================
+// Ô chọn ABC theo thang lương (tra cứu theo LCB) — giống combo động của app gốc
+// ============================================================================
+
+function AbcSelect({
+  lcbRaw,
+  value,
+  onChange,
+}: {
+  lcbRaw: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [options, setOptions] = useState<ThangLuongOptions | null>(null);
+  const [loading, setLoading] = useState(false);
+  const lcb = parseNumber(lcbRaw);
+
+  useEffect(() => {
+    if (!lcb || lcb <= 0) {
+      setOptions(null);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    const timer = setTimeout(() => {
+      fetchThangLuongOptions(lcb).then((opts) => {
+        if (cancelled) return;
+        setOptions(opts);
+        setLoading(false);
+        if (opts) {
+          const validValues = [opts.a, opts.b, opts.c, opts.d, opts.e, 0].map(String);
+          // Giữ nguyên lựa chọn cũ nếu vẫn hợp lệ với bậc lương mới, giống
+          // hệt hành vi _refresh_pcabc_options() của app gốc — nếu không,
+          // mặc định về mốc A.
+          if (!validValues.includes(value)) onChange(String(opts.a));
+        } else {
+          onChange("0");
+        }
+      });
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lcb]);
+
+  const levels: Array<{ letter: string; amount: number }> = options
+    ? [
+        { letter: "A", amount: options.a },
+        { letter: "B", amount: options.b },
+        { letter: "C", amount: options.c },
+        { letter: "D", amount: options.d },
+        { letter: "E", amount: options.e },
+      ]
+    : [];
+
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs text-muted-foreground">Phụ cấp kỹ năng ABC</Label>
+      <Select value={value || "0"} onValueChange={onChange} disabled={!options}>
+        <SelectTrigger>
+          <SelectValue placeholder={loading ? "Đang tra cứu..." : "0 (chưa có trong thang lương)"} />
+        </SelectTrigger>
+        <SelectContent>
+          {levels.map((l) => (
+            <SelectItem key={l.letter} value={String(l.amount)}>
+              {l.letter} - {formatVnd(l.amount)}
+            </SelectItem>
+          ))}
+          <SelectItem value="0">Không áp dụng (0)</SelectItem>
+        </SelectContent>
+      </Select>
+      <p className="text-xs text-muted-foreground">
+        {loading
+          ? "Đang tra cứu..."
+          : options
+            ? `✅ ${options.loai} — Bậc ${options.bacLuong} (LCB ${formatVnd(lcb)})`
+            : lcb
+              ? `⚠️ LCB ${formatVnd(lcb)} chưa có trong thang lương — báo admin cập nhật.`
+              : "Chưa xác định (chưa nhập LCB)"}
+      </p>
+    </div>
+  );
+}
+
+// ============================================================================
+// Ô chọn mức phụ cấp cố định (Chuyên cần / Thâm niên / Điện thoại / Trẻ em)
+// ============================================================================
+
+function FixedMoneySelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: number[];
+}) {
+  const current = String(parseNumber(value));
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <Select value={options.map(String).includes(current) ? current : "0"} onValueChange={onChange}>
+        <SelectTrigger>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((amount) => (
+            <SelectItem key={amount} value={String(amount)}>
+              {amount === 0 ? "Không áp dụng (0)" : formatVnd(amount)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+const CHUYEN_CAN_OPTIONS = [0, 200000];
+const THAM_NIEN_OPTIONS = [0, 400000, 500000, 600000];
+const DIEN_THOAI_OPTIONS = [0, 1500000, 2500000, 3000000, 4000000, 5000000];
+const TRE_EM_OPTIONS = [0, 50000, 100000, 150000, 200000];
+
+const WEEKDAY_NAMES = ["Chủ Nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"];
+
+// ============================================================================
 // Form đăng nhập / đăng ký — hiển thị ngay tại trang /tinhluong khi chưa
 // đăng nhập, không tách route riêng để tránh lỗi lồng route.
 // ============================================================================
@@ -281,7 +412,7 @@ function TinhLuongPage() {
   });
   const [timesheet, setTimesheet] = useState<TimesheetEntries>({});
   const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [tab, setTab] = useState("luong");
+  const [tab, setTab] = useState("chamcong");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "offline">("idle");
   const [changePwOpen, setChangePwOpen] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -372,14 +503,15 @@ function TinhLuongPage() {
     else toast.warning("Mất mạng — đã lưu tạm trên máy này, sẽ cần lưu lại khi có mạng");
   }
 
-  function handleApplyTimesheet() {
+  // ---- Bảng chấm công TỰ ĐỘNG quy đổi sang bảng lương — không cần bấm nút
+  // gì cả, chỉ cần gõ chấm công, mọi ô liên quan tự cập nhật ngay.
+  useEffect(() => {
     const anchorDate = caConfig.anchorDate ? new Date(caConfig.anchorDate + "T00:00:00Z") : null;
     const agg = aggregateMonth(timesheet, form.nam, form.thang, anchorDate, caConfig.anchorCa);
     const gioThieu = tinhGioThieuChuyenCan(timesheet, form.nam, form.thang);
     setForm((f) => ({ ...f, ...agg, gioThieuChuyenCan: gioThieu }));
-    toast.success("Đã áp dụng bảng chấm công vào bảng lương");
-    setTab("luong");
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timesheet, caConfig.anchorDate, caConfig.anchorCa, form.nam, form.thang]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -454,7 +586,7 @@ function TinhLuongPage() {
               value={maSJ}
               onChange={(e) => setMaSJ(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleLoadSj(maSJ)}
-              placeholder="VD: 2457"
+              placeholder="VD: 1234"
             />
           </div>
           <Button onClick={() => handleLoadSj(maSJ)}>Tải dữ liệu</Button>
@@ -501,49 +633,47 @@ function TinhLuongPage() {
 
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList>
-            <TabsTrigger value="luong">Tính lương</TabsTrigger>
             <TabsTrigger value="chamcong">Chấm công</TabsTrigger>
+            <TabsTrigger value="luong">Tính lương</TabsTrigger>
             <TabsTrigger value="lichsu">Lịch sử ({history.length})</TabsTrigger>
           </TabsList>
+
+          {/* ================= TAB: CHẤM CÔNG ================= */}
+          <TabsContent value="chamcong" className="mt-4">
+            <ChamCongTab
+              nam={form.nam}
+              thang={form.thang}
+              onThang={(v) => updateForm("thang", v)}
+              onNam={(v) => updateForm("nam", v)}
+              ngayCongChuan={result.ngayCongChuan}
+              caConfig={caConfig}
+              onCaConfig={setCaConfig}
+              entries={timesheet}
+              onEntries={setTimesheet}
+            />
+          </TabsContent>
 
           {/* ================= TAB: TÍNH LƯƠNG ================= */}
           <TabsContent value="luong" className="mt-4 space-y-6">
             <div className="grid gap-6 lg:grid-cols-2">
               <div className="space-y-6">
                 <section className="card-surface space-y-4 p-4">
-                  <h2 className="font-display text-sm font-semibold">Lương cơ bản &amp; kỳ lương</h2>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="col-span-3">
-                      <MoneyField
-                        label="Lương cơ bản"
-                        value={form.luongCoBan}
-                        onChange={(v) => updateForm("luongCoBan", v)}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Tháng</Label>
-                      <Select value={String(form.thang)} onValueChange={(v) => updateForm("thang", Number(v))}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {MONTH_OPTIONS.map((m) => (
-                            <SelectItem key={m} value={String(m)}>{String(m).padStart(2, "0")}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Năm</Label>
-                      <Input
-                        type="number"
-                        value={form.nam}
-                        onChange={(e) => updateForm("nam", Number(e.target.value) || form.nam)}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Ngày công chuẩn</Label>
-                      <Input value={result.ngayCongChuan} disabled />
-                    </div>
+                  <h2 className="font-display text-sm font-semibold">Lương cơ bản</h2>
+                  <div className="grid grid-cols-2 gap-3">
+                    <MoneyField
+                      label="Lương cơ bản"
+                      value={form.luongCoBan}
+                      onChange={(v) => updateForm("luongCoBan", v)}
+                    />
+                    <AbcSelect
+                      lcbRaw={form.luongCoBan}
+                      value={form.pcABC}
+                      onChange={(v) => updateForm("pcABC", v)}
+                    />
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    Tháng/năm chấm công và Ngày công chuẩn được chọn ở tab "Chấm công".
+                  </p>
                 </section>
 
                 <section className="card-surface space-y-3 p-4">
@@ -566,7 +696,7 @@ function TinhLuongPage() {
                 <section className="card-surface space-y-3 p-4">
                   <h2 className="font-display text-sm font-semibold">Bảng phụ — Lương ngày lễ, Tết</h2>
                   <p className="text-xs text-muted-foreground">
-                    Tự điền khi bấm "Áp dụng" ở tab Chấm công — vẫn có thể sửa tay.
+                    Tự điền từ bảng chấm công — vẫn có thể sửa tay.
                   </p>
                   <SubShiftRow
                     title="Ca 1"
@@ -597,20 +727,39 @@ function TinhLuongPage() {
                 <section className="card-surface space-y-3 p-4">
                   <h2 className="font-display text-sm font-semibold">Phụ cấp</h2>
                   <div className="grid grid-cols-2 gap-3">
-                    <MoneyField label="ABC" value={form.pcABC} onChange={(v) => updateForm("pcABC", v)} />
                     <div>
-                      <MoneyField label="Chuyên cần" value={form.pcChuyenCan} onChange={(v) => updateForm("pcChuyenCan", v)} />
+                      <FixedMoneySelect
+                        label="Chuyên cần"
+                        value={form.pcChuyenCan}
+                        onChange={(v) => updateForm("pcChuyenCan", v)}
+                        options={CHUYEN_CAN_OPTIONS}
+                      />
                       {result.matChuyenCan && (
                         <p className="mt-1 text-xs text-destructive">
                           Mất chuyên cần (thiếu công {'>'} 8 giờ trong tháng)
                         </p>
                       )}
                     </div>
-                    <MoneyField label="Thâm niên" value={form.pcThamNien} onChange={(v) => updateForm("pcThamNien", v)} />
+                    <FixedMoneySelect
+                      label="Thâm niên"
+                      value={form.pcThamNien}
+                      onChange={(v) => updateForm("pcThamNien", v)}
+                      options={THAM_NIEN_OPTIONS}
+                    />
+                    <FixedMoneySelect
+                      label="Hỗ trợ điện thoại"
+                      value={form.pcDienThoai}
+                      onChange={(v) => updateForm("pcDienThoai", v)}
+                      options={DIEN_THOAI_OPTIONS}
+                    />
+                    <FixedMoneySelect
+                      label="Hỗ trợ trẻ em dưới 6 tuổi"
+                      value={form.pcTreEm}
+                      onChange={(v) => updateForm("pcTreEm", v)}
+                      options={TRE_EM_OPTIONS}
+                    />
                     <MoneyField label="Chức vụ" value={form.pcChucVu} onChange={(v) => updateForm("pcChucVu", v)} />
                     <MoneyField label="Đi lại" value={form.pcDiLai} onChange={(v) => updateForm("pcDiLai", v)} />
-                    <MoneyField label="Điện thoại" value={form.pcDienThoai} onChange={(v) => updateForm("pcDienThoai", v)} />
-                    <MoneyField label="Trẻ em" value={form.pcTreEm} onChange={(v) => updateForm("pcTreEm", v)} />
                     <MoneyField label="Khác" value={form.pcKhac} onChange={(v) => updateForm("pcKhac", v)} />
                   </div>
                   <NumberField
@@ -656,19 +805,6 @@ function TinhLuongPage() {
                 </section>
               </div>
             </div>
-          </TabsContent>
-
-          {/* ================= TAB: CHẤM CÔNG ================= */}
-          <TabsContent value="chamcong" className="mt-4">
-            <ChamCongTab
-              nam={form.nam}
-              thang={form.thang}
-              caConfig={caConfig}
-              onCaConfig={setCaConfig}
-              entries={timesheet}
-              onEntries={setTimesheet}
-              onApply={handleApplyTimesheet}
-            />
           </TabsContent>
 
           {/* ================= TAB: LỊCH SỬ ================= */}
@@ -755,32 +891,73 @@ function MiniPair({
 // ============================================================================
 
 function ChamCongTab({
-  nam, thang, caConfig, onCaConfig, entries, onEntries, onApply,
+  nam, thang, onThang, onNam, ngayCongChuan, caConfig, onCaConfig, entries, onEntries,
 }: {
   nam: number;
   thang: number;
+  onThang: (v: number) => void;
+  onNam: (v: number) => void;
+  ngayCongChuan: number;
   caConfig: { anchorDate: string | null; anchorCa: string };
   onCaConfig: (c: { anchorDate: string | null; anchorCa: string }) => void;
   entries: TimesheetEntries;
   onEntries: (e: TimesheetEntries) => void;
-  onApply: () => void;
 }) {
   const daysInMonth = new Date(Date.UTC(nam, thang, 0)).getUTCDate();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  // refs để Enter chuyển ô: input[day][field] với field 0=HC,1=TC,2=GG
+  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   function setCell(day: number, idx: 0 | 1 | 2, raw: string) {
-    const cur = entries[day] ?? ["", 0, 0];
-    const next: [string | number, number, number] = [
-      idx === 0 ? raw : (cur[0] as string | number),
-      idx === 1 ? Number(raw || 0) : ((cur[1] as number) ?? 0),
-      idx === 2 ? Number(raw || 0) : ((cur[2] as number) ?? 0),
+    const cur = entries[day] ?? ["", "", ""];
+    const next: [string | number, string | number, string | number] = [
+      idx === 0 ? raw : ((cur[0] as string | number) ?? ""),
+      idx === 1 ? raw : ((cur[1] as string | number) ?? ""),
+      idx === 2 ? raw : ((cur[2] as string | number) ?? ""),
     ];
     onEntries({ ...entries, [day]: next });
+  }
+
+  function focusField(day: number, idx: 0 | 1 | 2) {
+    inputRefs.current[`${day}-${idx}`]?.focus();
+  }
+
+  function handleEnter(day: number, idx: 0 | 1 | 2, dayIndex: number) {
+    if (idx < 2) {
+      focusField(day, (idx + 1) as 0 | 1 | 2);
+    } else {
+      const nextDay = days[dayIndex + 1];
+      if (nextDay) focusField(nextDay, 0);
+    }
   }
 
   return (
     <div className="space-y-4">
       <section className="card-surface flex flex-wrap items-end gap-4 p-4">
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Tháng</Label>
+          <Select value={String(thang)} onValueChange={(v) => onThang(Number(v))}>
+            <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {MONTH_OPTIONS.map((m) => (
+                <SelectItem key={m} value={String(m)}>{String(m).padStart(2, "0")}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Năm</Label>
+          <Input
+            type="number"
+            className="w-24"
+            value={nam}
+            onChange={(e) => onNam(Number(e.target.value) || nam)}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Ngày công chuẩn</Label>
+          <Input value={ngayCongChuan} disabled className="w-24" />
+        </div>
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Ca neo (ngày biết chắc)</Label>
           <Input
@@ -800,25 +977,26 @@ function ChamCongTab({
             </SelectContent>
           </Select>
         </div>
-        <p className="max-w-sm text-xs text-muted-foreground">
-          Đổi ca mỗi 14 ngày kể từ ngày neo. Cột "Ca" bên dưới tự suy ra cho từng ngày.
+        <p className="max-w-xs text-xs text-muted-foreground">
+          Đổi ca mỗi 14 ngày kể từ ngày neo. Nhập xong ô nào tự chuyển sang bảng lương ngay, không cần
+          bấm nút gì. Nhấn Enter để chuyển nhanh sang ô tiếp theo.
         </p>
-        <Button className="ml-auto" onClick={onApply}>Áp dụng vào bảng lương</Button>
       </section>
 
       <section className="card-surface overflow-x-auto p-4">
-        <table className="w-full min-w-[560px] text-sm">
+        <table className="w-full min-w-[620px] text-sm">
           <thead>
             <tr className="border-b border-border text-left text-xs text-muted-foreground">
               <th className="py-2 pr-2">Ngày</th>
+              <th className="py-2 pr-2">Thứ</th>
               <th className="py-2 pr-2">Ca</th>
-              <th className="py-2 pr-2">Giờ HC (hoặc PN / PN 1/2 / NL)</th>
-              <th className="py-2 pr-2">Tăng ca</th>
-              <th className="py-2 pr-2">TC giữa giờ</th>
+              <th className="border-l border-border py-2 pl-2 pr-1">Giờ HC</th>
+              <th className="py-2 px-1">Tăng ca</th>
+              <th className="py-2 pl-1">TC giữa giờ</th>
             </tr>
           </thead>
           <tbody>
-            {days.map((day) => {
+            {days.map((day, dayIndex) => {
               const cell = entries[day];
               const hc = cell ? String(cell[0] ?? "") : "";
               const tc = cell ? String(cell[1] ?? "") : "";
@@ -828,32 +1006,51 @@ function ChamCongTab({
                 ? resolveCa(new Date(caConfig.anchorDate + "T00:00:00Z"), caConfig.anchorCa, d)
                 : null;
               const isSunday = d.getUTCDay() === 0;
+              const holiday = classifyDate(d);
+              const isSpecialDay = isSunday || !!holiday;
               return (
-                <tr key={day} className={cn("border-b border-border/50", isSunday && "bg-secondary/40")}>
-                  <td className="py-1 pr-2 font-medium">{day}</td>
+                <tr
+                  key={day}
+                  className={cn(
+                    "border-b border-border/50",
+                    isSpecialDay && "bg-destructive/10",
+                  )}
+                >
+                  <td className={cn("py-1 pr-2 font-medium", isSpecialDay && "text-destructive")}>{day}</td>
+                  <td className={cn("py-1 pr-2 text-xs", isSpecialDay ? "font-medium text-destructive" : "text-muted-foreground")}>
+                    {WEEKDAY_NAMES[d.getUTCDay()]}
+                    {holiday === "tet" && " · Tết"}
+                    {holiday === "le" && " · Lễ"}
+                  </td>
                   <td className="py-1 pr-2 text-xs text-muted-foreground">
                     {ca === CA_DEM ? "Đêm" : ca === CA_NGAY ? "Ngày" : "—"}
                   </td>
-                  <td className="py-1 pr-2">
+                  <td className="border-l border-border py-1 pl-2 pr-1">
                     <Input
+                      ref={(el) => { inputRefs.current[`${day}-0`] = el; }}
                       className="h-8 w-28 text-xs"
                       value={hc}
                       onChange={(e) => setCell(day, 0, e.target.value)}
-                      placeholder="8 / PN / NL"
+                      onKeyDown={(e) => e.key === "Enter" && handleEnter(day, 0, dayIndex)}
+                      placeholder="8"
                     />
                   </td>
-                  <td className="py-1 pr-2">
+                  <td className="py-1 px-1">
                     <Input
+                      ref={(el) => { inputRefs.current[`${day}-1`] = el; }}
                       className="h-8 w-20 text-xs"
                       value={tc}
                       onChange={(e) => setCell(day, 1, e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleEnter(day, 1, dayIndex)}
                     />
                   </td>
-                  <td className="py-1 pr-2">
+                  <td className="py-1 pl-1">
                     <Input
+                      ref={(el) => { inputRefs.current[`${day}-2`] = el; }}
                       className="h-8 w-20 text-xs"
                       value={gg}
                       onChange={(e) => setCell(day, 2, e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleEnter(day, 2, dayIndex)}
                     />
                   </td>
                 </tr>

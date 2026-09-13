@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Gift, Minus } from "lucide-react";
+import { isMobileDevice } from "@/lib/is-mobile-device";
 
 /**
  * Khung "Ủng hộ" nổi góc dưới trái.
@@ -17,10 +18,7 @@ export function DonateWidget() {
     // Nhận diện THIẾT BỊ điện thoại (không phải độ rộng cửa sổ) — để dù
     // người dùng resize cửa sổ máy tính nhỏ lại, khung vẫn không tự thu
     // gọn thành bong bóng như trên điện thoại thật.
-    const isPhone = /Android|iPhone|iPod|Windows Phone|Mobile(?!.*iPad)/i.test(
-      navigator.userAgent,
-    );
-    if (isPhone) setOpen(false);
+    if (isMobileDevice()) setOpen(false);
   }, []);
 
   if (!open) {
