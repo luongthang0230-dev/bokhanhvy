@@ -45,12 +45,6 @@ export function AdminThangLuong() {
     setUploading(true);
     try {
       const parsed = await parseThangLuongExcel(file);
-      if (parsed.length === 0) {
-        toast.error(
-          "Không đọc được bậc lương nào — kiểm tra file có đủ cột 'Bậc lương', 'Lương cơ bản' và A/B/C/D/E chưa.",
-        );
-        return;
-      }
       if (
         !window.confirm(
           `Đọc được ${parsed.length} bậc lương từ file. Thao tác này sẽ THAY THẾ toàn bộ thang lương hiện có (dùng chung cho mọi tài khoản). Tiếp tục?`,
@@ -62,7 +56,8 @@ export function AdminThangLuong() {
       toast.success(`Đã cập nhật thang lương mới (${count} bậc lương).`);
       reload();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Đọc file Excel thất bại");
+      console.error("Đọc file thang lương thất bại:", err);
+      toast.error(err instanceof Error ? err.message : "Đọc file Excel thất bại", { duration: 10000 });
     } finally {
       setUploading(false);
     }

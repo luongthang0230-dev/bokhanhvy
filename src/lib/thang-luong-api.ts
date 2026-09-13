@@ -48,8 +48,16 @@ interface HeaderCols {
   levels: Record<string, number>;
 }
 
-function detectHeaderColumns(row: unknown[]): HeaderCols | null {
-  if (!row || row.length === 0) return null;
+interface HeaderDetectResult {
+  cols: HeaderCols | null;
+  /** Những gì đã nhận diện được ở dòng tiêu đề khớp nhất, để báo lỗi cụ thể
+   *  thay vì chỉ nói chung chung "đọc file thất bại". */
+  found: { bac: boolean; lcb: boolean; levels: string[] };
+}
+
+function detectHeaderColumns(row: unknown[]): HeaderDetectResult {
+  const empty: HeaderDetectResult = { cols: null, found: { bac: false, lcb: false, levels: [] } };
+  if (!row || row.length === 0) return empty;
   let bacCol: number | null = null;
   let lcbCol: number | null = null;
   const levelCols: Record<string, number> = {};
@@ -69,20 +77,39 @@ function detectHeaderColumns(row: unknown[]): HeaderCols | null {
       levelCols[firstToken] = idx;
     }
   });
+  const found = { bac: bacCol !== null, lcb: lcbCol !== null, levels: Object.keys(levelCols) };
   if (bacCol === null || lcbCol === null || Object.keys(levelCols).length < REQUIRED_LEVELS.length) {
-    return null;
+    return { cols: null, found };
   }
-  return { bac: bacCol, lcb: lcbCol, levels: levelCols };
+  return { cols: { bac: bacCol, lcb: lcbCol, levels: levelCols }, found };
 }
+
+export class ThangLuongParseError extends Error {}
 
 /** Đọc toàn bộ workbook, mỗi sheet là 1 "loại" thang lương — giống
  *  parse_thang_luong_excel() của Python: tự quét cột theo tên tiêu đề, bỏ
- *  qua sheet không đủ cột bắt buộc. */
+ *  qua sheet không đủ cột bắt buộc. Nếu KHÔNG sheet nào đủ cột, ném lỗi có
+ *  liệt kê rõ từng sheet còn thiếu gì, thay vì chỉ báo "thất bại" chung chung. */
 export async function parseThangLuongExcel(file: File): Promise<ThangLuongRow[]> {
-  const buf = await file.arrayBuffer();
-  const wb = XLSX.read(buf, { type: "array" });
+  let wb: XLSX.WorkBook;
+  try {
+    const buf = await file.arrayBuffer();
+    wb = XLSX.read(buf, { type: "array" });
+  } catch (err) {
+    throw new ThangLuongParseError(
+      `Không mở được file "${file.name}" — file có thể bị hỏng hoặc không đúng định dạng .xlsx/.xls. (${
+        err instanceof Error ? err.message : String(err)
+      })`,
+    );
+  }
+
+  if (wb.SheetNames.length === 0) {
+    throw new ThangLuongParseError("File Excel không có sheet nào.");
+  }
+
   const out: ThangLuongRow[] = [];
   let thuTu = 0;
+  const sheetDiagnostics: string[] = [];
 
   for (const sheetName of wb.SheetNames) {
     const ws = wb.Sheets[sheetName];
@@ -91,15 +118,28 @@ export async function parseThangLuongExcel(file: File): Promise<ThangLuongRow[]>
 
     let headerIdx = -1;
     let cols: HeaderCols | null = null;
+    let bestFound: HeaderDetectResult["found"] = { bac: false, lcb: false, levels: [] };
     for (let i = 0; i < rows.length; i++) {
       const detected = detectHeaderColumns(rows[i] ?? []);
-      if (detected) {
+      if (detected.found.levels.length > bestFound.levels.length || (detected.found.bac && detected.found.lcb))
+        bestFound = detected.found;
+      if (detected.cols) {
         headerIdx = i;
-        cols = detected;
+        cols = detected.cols;
         break;
       }
     }
-    if (headerIdx === -1 || !cols) continue;
+    if (headerIdx === -1 || !cols) {
+      const missing: string[] = [];
+      if (!bestFound.bac) missing.push('"Bậc lương" (hoặc "Thang lương")');
+      if (!bestFound.lcb) missing.push('"Lương cơ bản" (hoặc "LCB")');
+      const missingLevels = REQUIRED_LEVELS.filter((l) => !bestFound.levels.includes(l));
+      if (missingLevels.length) missing.push(`cột ${missingLevels.join("/")}`);
+      sheetDiagnostics.push(
+        `Sheet "${sheetName}": thiếu ${missing.length ? missing.join(", ") : "dòng tiêu đề hợp lệ"}.`,
+      );
+      continue;
+    }
     const foundCols = cols;
 
     const loai = sheetName.trim();
@@ -123,6 +163,14 @@ export async function parseThangLuongExcel(file: File): Promise<ThangLuongRow[]>
         thuTu,
       });
     }
+  }
+
+  if (out.length === 0) {
+    throw new ThangLuongParseError(
+      sheetDiagnostics.length
+        ? `Không đọc được bậc lương nào.\n${sheetDiagnostics.join("\n")}`
+        : "Không đọc được bậc lương nào — kiểm tra lại nội dung file.",
+    );
   }
   return out;
 }

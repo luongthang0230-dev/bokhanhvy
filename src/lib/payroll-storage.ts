@@ -227,3 +227,24 @@ export async function listAllSj(userId: string): Promise<string[]> {
     }
   }
 }
+
+/** Xoá hẳn 1 mã SJ đã lưu (cấu hình + chấm công + lịch sử) — dùng khi
+ *  người dùng lỡ nhập/lưu sai mã. Không thể hoàn tác. */
+export async function deleteSj(userId: string, maSJ: string): Promise<void> {
+  const trimmed = maSJ.trim();
+  await Promise.all([
+    supabase.from("payroll_sj_records").delete().eq("user_id", userId).eq("ma_sj", trimmed),
+    supabase.from("payroll_history").delete().eq("user_id", userId).eq("ma_sj", trimmed),
+  ]);
+  if (typeof window !== "undefined") {
+    window.localStorage.removeItem(cacheKey(userId, trimmed));
+    try {
+      const listKey = `${CACHE_PREFIX}${userId}:__list`;
+      const list = new Set(JSON.parse(window.localStorage.getItem(listKey) ?? "[]") as string[]);
+      list.delete(trimmed);
+      window.localStorage.setItem(listKey, JSON.stringify([...list]));
+    } catch {
+      // bỏ qua — không có cache danh sách cũng không sao
+    }
+  }
+}

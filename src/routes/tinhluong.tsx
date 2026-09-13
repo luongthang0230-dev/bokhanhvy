@@ -53,6 +53,7 @@ import {
   saveSj,
   addHistory,
   deleteHistoryEntry,
+  deleteSj,
   listAllSj,
   type HistoryEntry,
 } from "@/lib/payroll-storage";
@@ -517,6 +518,25 @@ function TinhLuongPage() {
     await supabase.auth.signOut();
   }
 
+  async function handleDeleteSj(code: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!userId) return;
+    if (!window.confirm(`Xoá vĩnh viễn mã SJ "${code}"? Toàn bộ dữ liệu lương + lịch sử của mã này sẽ mất, không thể hoàn tác.`)) {
+      return;
+    }
+    await deleteSj(userId, code);
+    setMySjList((l) => l.filter((c) => c !== code));
+    if (loadedSJ === code) {
+      setLoadedSJ(null);
+      setMaSJ("");
+      setForm({ ...emptyPayrollInput(), thang: form.thang, nam: form.nam });
+      setHistory([]);
+      setTimesheet({});
+      allTimesheetsRef.current = {};
+    }
+    toast.success(`Đã xoá mã SJ "${code}"`);
+  }
+
   if (authLoading) {
     return (
       <div className="flex min-h-screen flex-col">
@@ -561,9 +581,6 @@ function TinhLuongPage() {
         <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="font-display text-2xl font-bold">Tính lương</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Phiên bản Web của ứng dụng Tính lương — công thức và cách tính giống 100% bản desktop.
-            </p>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">
@@ -599,8 +616,20 @@ function TinhLuongPage() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
                 {mySjList.map((code) => (
-                  <DropdownMenuItem key={code} onClick={() => handleLoadSj(code)}>
+                  <DropdownMenuItem
+                    key={code}
+                    onClick={() => handleLoadSj(code)}
+                    className="flex items-center justify-between gap-3"
+                  >
                     {code}
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeleteSj(code, e)}
+                      aria-label={`Xoá mã ${code}`}
+                      className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
@@ -624,8 +653,8 @@ function TinhLuongPage() {
         {!loadedSJ && (
           <div className="card-surface mb-6 flex items-center gap-2 p-4 text-sm text-muted-foreground">
             <Info className="h-4 w-4 shrink-0" />
-            Nhập mã SJ và bấm "Tải dữ liệu" để bắt đầu — dữ liệu sẽ tự lưu lên server theo tài khoản
-            của bạn, đăng nhập ở máy khác cũng thấy nguyên, không bị mất khi đóng trang.
+            Nhập mã SJ và bấm "Tải dữ liệu" để bắt đầu — dữ liệu của bạn sẽ được lưu lên Sever theo tài
+            khoản của bạn.
           </div>
         )}
 
@@ -978,21 +1007,20 @@ function ChamCongTab({
           </Select>
         </div>
         <p className="max-w-xs text-xs text-muted-foreground">
-          Đổi ca mỗi 14 ngày kể từ ngày neo. Nhập xong ô nào tự chuyển sang bảng lương ngay, không cần
-          bấm nút gì. Nhấn Enter để chuyển nhanh sang ô tiếp theo.
+          2 tuần đổi ca 1 lần, tính từ ngày thứ 2 tuần đầu đổi ca.
         </p>
       </section>
 
       <section className="card-surface overflow-x-auto p-4">
-        <table className="w-full min-w-[620px] text-sm">
+        <table className="w-full min-w-[420px] text-sm">
           <thead>
             <tr className="border-b border-border text-left text-xs text-muted-foreground">
-              <th className="py-2 pr-2">Ngày</th>
-              <th className="py-2 pr-2">Thứ</th>
+              <th className="py-2 pr-1">Ngày</th>
+              <th className="py-2 pr-1">Thứ</th>
               <th className="py-2 pr-2">Ca</th>
-              <th className="border-l border-border py-2 pl-2 pr-1">Giờ HC</th>
-              <th className="py-2 px-1">Tăng ca</th>
-              <th className="py-2 pl-1">TC giữa giờ</th>
+              <th className="border-l border-border py-2 pl-2 pr-0.5">Giờ HC</th>
+              <th className="py-2 px-0.5">Tăng ca</th>
+              <th className="py-2 pl-0.5">TC giữa giờ</th>
             </tr>
           </thead>
           <tbody>
@@ -1016,8 +1044,8 @@ function ChamCongTab({
                     isSpecialDay && "bg-destructive/10",
                   )}
                 >
-                  <td className={cn("py-1 pr-2 font-medium", isSpecialDay && "text-destructive")}>{day}</td>
-                  <td className={cn("py-1 pr-2 text-xs", isSpecialDay ? "font-medium text-destructive" : "text-muted-foreground")}>
+                  <td className={cn("py-1 pr-1 font-medium", isSpecialDay && "text-destructive")}>{day}</td>
+                  <td className={cn("py-1 pr-1 text-xs", isSpecialDay ? "font-medium text-destructive" : "text-muted-foreground")}>
                     {WEEKDAY_NAMES[d.getUTCDay()]}
                     {holiday === "tet" && " · Tết"}
                     {holiday === "le" && " · Lễ"}
@@ -1025,29 +1053,29 @@ function ChamCongTab({
                   <td className="py-1 pr-2 text-xs text-muted-foreground">
                     {ca === CA_DEM ? "Đêm" : ca === CA_NGAY ? "Ngày" : "—"}
                   </td>
-                  <td className="border-l border-border py-1 pl-2 pr-1">
+                  <td className="border-l border-border py-1 pl-2 pr-0.5">
                     <Input
                       ref={(el) => { inputRefs.current[`${day}-0`] = el; }}
-                      className="h-8 w-28 text-xs"
+                      className="h-8 w-14 px-1.5 text-xs"
                       value={hc}
                       onChange={(e) => setCell(day, 0, e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && handleEnter(day, 0, dayIndex)}
                       placeholder="8"
                     />
                   </td>
-                  <td className="py-1 px-1">
+                  <td className="py-1 px-0.5">
                     <Input
                       ref={(el) => { inputRefs.current[`${day}-1`] = el; }}
-                      className="h-8 w-20 text-xs"
+                      className="h-8 w-10 px-1 text-xs"
                       value={tc}
                       onChange={(e) => setCell(day, 1, e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && handleEnter(day, 1, dayIndex)}
                     />
                   </td>
-                  <td className="py-1 pl-1">
+                  <td className="py-1 pl-0.5">
                     <Input
                       ref={(el) => { inputRefs.current[`${day}-2`] = el; }}
-                      className="h-8 w-20 text-xs"
+                      className="h-8 w-10 px-1 text-xs"
                       value={gg}
                       onChange={(e) => setCell(day, 2, e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && handleEnter(day, 2, dayIndex)}
