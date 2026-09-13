@@ -52,7 +52,7 @@ begin
     raise exception 'Chỉ admin mới được cập nhật thang lương';
   end if;
 
-  delete from public.payroll_thang_luong;
+  truncate table public.payroll_thang_luong;
 
   insert into public.payroll_thang_luong (loai, bac_luong, lcb, a, b, c, d, e, thu_tu)
   select

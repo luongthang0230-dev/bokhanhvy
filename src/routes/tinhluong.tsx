@@ -424,7 +424,23 @@ function TinhLuongPage() {
   const allTimesheetsRef = useRef<Record<string, TimesheetEntries>>({});
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId) {
+      // Đăng xuất (hoặc chưa đăng nhập): xoá sạch state cục bộ để không lộ
+      // dữ liệu của tài khoản trước đó khi một tài khoản khác đăng nhập vào
+      // trên cùng tab.
+      setMySjList([]);
+      setMaSJ("");
+      setLoadedSJ(null);
+      setForm(() => {
+        const base = emptyPayrollInput();
+        const { thang, nam } = defaultMonthYear();
+        return { ...base, thang, nam };
+      });
+      setTimesheet({});
+      setHistory([]);
+      allTimesheetsRef.current = {};
+      return;
+    }
     listAllSj(userId).then(setMySjList);
   }, [userId]);
 
@@ -516,6 +532,9 @@ function TinhLuongPage() {
 
   async function handleLogout() {
     await supabase.auth.signOut();
+    // Reload cứng trang: đảm bảo quay thẳng về màn hình đăng nhập và xoá
+    // sạch mọi state cũ trong bộ nhớ, không phụ thuộc vào cache react-query.
+    window.location.reload();
   }
 
   async function handleDeleteSj(code: string, e: React.MouseEvent) {
@@ -1060,7 +1079,6 @@ function ChamCongTab({
                       value={hc}
                       onChange={(e) => setCell(day, 0, e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && handleEnter(day, 0, dayIndex)}
-                      placeholder="8"
                     />
                   </td>
                   <td className="py-1 px-0.5">
