@@ -255,7 +255,7 @@ function SoftwareCard({ sw, index }: { sw: Software; index: number }) {
         disabled={!driveLink}
       >
         <Download className="mr-1 h-4 w-4" />
-        Tải xuống qua Google Drive
+        Tải xuống ngay
       </Button>
 
       {hasDescription && (
