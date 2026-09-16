@@ -9,6 +9,7 @@ import { softwareQuery, formatNumber } from "@/lib/api";
 import { subscribeToConversations, fetchConversations } from "@/lib/feedback-api";
 import { AdminFeedbackInbox } from "@/components/site/AdminFeedbackInbox";
 import { AdminPayrollUsers } from "@/components/site/AdminPayrollUsers";
+import { AdminCpkUsers } from "@/components/site/AdminCpkUsers";
 import { AdminThangLuong } from "@/components/site/AdminThangLuong";
 import type { Software } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -86,7 +87,7 @@ function AdminPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState<"software" | "feedback" | "payroll-users" | "thang-luong">("software");
+  const [tab, setTab] = useState<"software" | "feedback" | "payroll-users" | "cpk-users" | "thang-luong">("software");
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
@@ -284,6 +285,18 @@ function AdminPage() {
           </button>
           <button
             type="button"
+            onClick={() => setTab("cpk-users")}
+            className={cn(
+              "flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors",
+              tab === "cpk-users"
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <Users className="h-4 w-4" /> Người dùng CPK
+          </button>
+          <button
+            type="button"
             onClick={() => setTab("thang-luong")}
             className={cn(
               "flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors",
@@ -300,6 +313,8 @@ function AdminPage() {
           <AdminFeedbackInbox />
         ) : tab === "payroll-users" ? (
           <AdminPayrollUsers />
+        ) : tab === "cpk-users" ? (
+          <AdminCpkUsers />
         ) : tab === "thang-luong" ? (
           <AdminThangLuong />
         ) : (

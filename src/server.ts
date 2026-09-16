@@ -2,6 +2,7 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
+import { handleCpkApiRequest } from "./lib/cpk-api-route";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -46,6 +47,12 @@ function isH3SwallowedErrorBody(body: string): boolean {
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
+    // Route REST thuần cho app desktop "CPK Filter Tool" (không phải trình duyệt, không đi qua
+    // router React/TanStack) - chặn TRƯỚC KHI giao cho TanStack Start xử lý, xem
+    // src/lib/cpk-api-route.ts để biết đầy đủ các endpoint.
+    const cpkApiResponse = await handleCpkApiRequest(request);
+    if (cpkApiResponse) return cpkApiResponse;
+
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
