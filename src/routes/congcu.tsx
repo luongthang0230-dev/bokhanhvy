@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Copy, Eraser, Check } from "lucide-react";
+import { Copy, Eraser, Check, ArrowLeftRight } from "lucide-react";
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
 import { Button } from "@/components/ui/button";
@@ -16,18 +16,14 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
-  LENGTH_UNIT_LABELS,
-  AREA_UNIT_LABELS,
-  FORCE_UNIT_LABELS,
-  convertLength,
-  convertArea,
-  convertForce,
-  areaToEquivalentSide,
+  UNITS,
+  KIND_LABELS,
+  convertFree,
   bubbleDimension,
   formatResult,
-  type LengthUnit,
-  type AreaUnit,
-  type ForceUnit,
+  unitLabel,
+  type UnitId,
+  type UnitKind,
 } from "@/lib/unit-converter";
 
 export const Route = createFileRoute("/congcu")({
@@ -66,74 +62,77 @@ function CongCuPage() {
 }
 
 // ============================================================================
-// Chuyển đổi đơn vị
+// Chuyển đổi đơn vị — tự do chọn đơn vị đầu vào / đầu ra, không chia nhóm
 // ============================================================================
 
-type Group = "length" | "area" | "area-to-side" | "force";
-
-const GROUP_LABELS: Record<Group, string> = {
-  length: "Chiều dài",
-  area: "Diện tích",
-  "area-to-side": "Diện tích → cạnh tương đương",
-  force: "Lực",
+// Gom đơn vị theo kind chỉ để hiển thị tách nhóm trực quan trong danh sách
+// thả xuống (label), KHÔNG giới hạn việc chọn — người dùng vẫn chọn tự do
+// bất kỳ đơn vị nào ở cả 2 ô, kể cả khác kind (vd µm² -> mm).
+const UNITS_BY_KIND: Record<UnitKind, typeof UNITS> = {
+  length: UNITS.filter((u) => u.kind === "length"),
+  area: UNITS.filter((u) => u.kind === "area"),
+  force: UNITS.filter((u) => u.kind === "force"),
 };
 
-const LENGTH_UNITS = Object.keys(LENGTH_UNIT_LABELS) as LengthUnit[];
-const AREA_UNITS = Object.keys(AREA_UNIT_LABELS) as AreaUnit[];
-const FORCE_UNITS = Object.keys(FORCE_UNIT_LABELS) as ForceUnit[];
-
-function unitsForGroup(group: Group, side: "from" | "to"): { value: string; label: string }[] {
-  if (group === "length") return LENGTH_UNITS.map((u) => ({ value: u, label: LENGTH_UNIT_LABELS[u] }));
-  if (group === "area") return AREA_UNITS.map((u) => ({ value: u, label: AREA_UNIT_LABELS[u] }));
-  if (group === "force") return FORCE_UNITS.map((u) => ({ value: u, label: FORCE_UNIT_LABELS[u] }));
-  // area-to-side: đầu vào là đơn vị diện tích, đầu ra là đơn vị chiều dài
-  return side === "from"
-    ? AREA_UNITS.map((u) => ({ value: u, label: AREA_UNIT_LABELS[u] }))
-    : LENGTH_UNITS.map((u) => ({ value: u, label: LENGTH_UNIT_LABELS[u] }));
-}
-
-function defaultUnits(group: Group): { from: string; to: string } {
-  if (group === "length") return { from: "mm", to: "um" };
-  if (group === "area") return { from: "mm2", to: "um2" };
-  if (group === "force") return { from: "N", to: "gf" };
-  return { from: "mm2", to: "mm" };
+function UnitSelect({
+  value,
+  onChange,
+  label,
+}: {
+  value: UnitId;
+  onChange: (v: UnitId) => void;
+  label: string;
+}) {
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <Select value={value} onValueChange={(v) => onChange(v as UnitId)}>
+        <SelectTrigger className="h-11 text-base">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {(Object.keys(UNITS_BY_KIND) as UnitKind[]).map((kind) => (
+            <div key={kind}>
+              <p className="px-2 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                {KIND_LABELS[kind]}
+              </p>
+              {UNITS_BY_KIND[kind].map((u) => (
+                <SelectItem key={u.id} value={u.id}>
+                  {u.label}
+                </SelectItem>
+              ))}
+            </div>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
 }
 
 function UnitConverterCard() {
-  const [group, setGroup] = useState<Group>("length");
-  const [fromUnit, setFromUnit] = useState<string>("mm");
-  const [toUnit, setToUnit] = useState<string>("um");
+  const [fromUnit, setFromUnit] = useState<UnitId>("mm");
+  const [toUnit, setToUnit] = useState<UnitId>("um");
   const [rawValue, setRawValue] = useState("1");
   const [copied, setCopied] = useState(false);
-
-  function handleGroupChange(next: string) {
-    const g = next as Group;
-    setGroup(g);
-    const d = defaultUnits(g);
-    setFromUnit(d.from);
-    setToUnit(d.to);
-  }
 
   const numericValue = rawValue.trim() === "" ? NaN : Number(rawValue.replace(",", "."));
 
   const result = useMemo(() => {
     if (!isFinite(numericValue)) return null;
-    if (group === "length") return convertLength(numericValue, fromUnit as LengthUnit, toUnit as LengthUnit);
-    if (group === "area") return convertArea(numericValue, fromUnit as AreaUnit, toUnit as AreaUnit);
-    if (group === "force") return convertForce(numericValue, fromUnit as ForceUnit, toUnit as ForceUnit);
-    return areaToEquivalentSide(numericValue, fromUnit as AreaUnit, toUnit as LengthUnit);
-  }, [group, fromUnit, toUnit, numericValue]);
+    return convertFree(numericValue, fromUnit, toUnit);
+  }, [fromUnit, toUnit, numericValue]);
 
-  const toLabel =
-    group === "length"
-      ? LENGTH_UNIT_LABELS[toUnit as LengthUnit]
-      : group === "area"
-        ? AREA_UNIT_LABELS[toUnit as AreaUnit]
-        : group === "force"
-          ? FORCE_UNIT_LABELS[toUnit as ForceUnit]
-          : LENGTH_UNIT_LABELS[toUnit as LengthUnit];
+  const fromDef = UNITS.find((u) => u.id === fromUnit);
+  const toDef = UNITS.find((u) => u.id === toUnit);
+  const crossKind = fromDef && toDef && fromDef.kind !== toDef.kind;
+  const unsupported = isFinite(numericValue) && result === null;
 
-  const resultText = result === null ? "" : `${formatResult(result)} ${toLabel}`;
+  const resultText = result === null ? "" : `${formatResult(result)} ${unitLabel(toUnit)}`;
+
+  function handleSwap() {
+    setFromUnit(toUnit);
+    setToUnit(fromUnit);
+  }
 
   function handleClear() {
     setRawValue("");
@@ -154,77 +153,59 @@ function UnitConverterCard() {
   return (
     <div className="card-surface space-y-4 p-5">
       <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Nhóm chuyển đổi</Label>
-        <Select value={group} onValueChange={handleGroupChange}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {(Object.keys(GROUP_LABELS) as Group[]).map((g) => (
-              <SelectItem key={g} value={g}>
-                {GROUP_LABELS[g]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Label className="text-xs text-muted-foreground">Giá trị</Label>
+        <Input
+          className="h-11 text-base"
+          inputMode="decimal"
+          value={rawValue}
+          onChange={(e) => setRawValue(e.target.value)}
+          placeholder="0"
+        />
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Giá trị</Label>
-          <Input
-            className="w-full sm:w-28"
-            inputMode="decimal"
-            value={rawValue}
-            onChange={(e) => setRawValue(e.target.value)}
-            placeholder="0"
-          />
+      {/* Xếp dọc trên điện thoại, có nút hoán đổi ở giữa; từ sm trở lên xếp ngang */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-3">
+        <div className="flex-1">
+          <UnitSelect value={fromUnit} onChange={setFromUnit} label="Đơn vị đầu vào" />
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Đơn vị đầu vào</Label>
-          <Select value={fromUnit} onValueChange={setFromUnit}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {unitsForGroup(group, "from").map((u) => (
-                <SelectItem key={u.value} value={u.value}>
-                  {u.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="flex justify-center sm:pb-[2px]">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={handleSwap}
+            className="h-9 w-9 shrink-0 rotate-90 sm:rotate-0"
+            aria-label="Hoán đổi đơn vị"
+          >
+            <ArrowLeftRight className="h-4 w-4" />
+          </Button>
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Đơn vị kết quả</Label>
-          <Select value={toUnit} onValueChange={setToUnit}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {unitsForGroup(group, "to").map((u) => (
-                <SelectItem key={u.value} value={u.value}>
-                  {u.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="flex-1">
+          <UnitSelect value={toUnit} onChange={setToUnit} label="Đơn vị kết quả" />
         </div>
       </div>
 
-      {group === "area-to-side" && (
+      {crossKind && !unsupported && (
         <p className="rounded-lg bg-secondary/50 px-3 py-2 text-xs text-muted-foreground">
-          Đây là kích thước cạnh tương đương của hình vuông (cạnh = √diện tích) — không phải phép
-          chuyển đổi đơn vị vật lý thông thường.
+          Diện tích → chiều dài được hiểu là cạnh tương đương (cạnh = √diện tích); chiều dài →
+          diện tích được hiểu là diện tích hình vuông có cạnh bằng giá trị nhập — không phải quy
+          đổi đơn vị vật lý thông thường.
         </p>
       )}
 
-      <div className="rounded-xl bg-primary/10 px-4 py-3">
-        <p className="text-xs text-muted-foreground">Kết quả</p>
-        <p className="font-mono text-2xl font-bold text-primary">
-          {resultText || "—"}
-        </p>
-      </div>
+      {unsupported ? (
+        <div className="rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          Không thể chuyển đổi giữa lực và chiều dài/diện tích — hãy chọn 2 đơn vị cùng loại (hoặc
+          cặp diện tích ↔ chiều dài).
+        </div>
+      ) : (
+        <div className="rounded-xl bg-primary/10 px-4 py-3">
+          <p className="text-xs text-muted-foreground">Kết quả</p>
+          <p className="font-mono text-2xl font-bold text-primary break-all">
+            {resultText || "—"}
+          </p>
+        </div>
+      )}
 
       <div className="flex gap-2">
         <Button variant="outline" onClick={handleClear}>
