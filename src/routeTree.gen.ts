@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CongcuRouteImport } from './routes/congcu'
 import { Route as TinhluongRouteImport } from './routes/tinhluong'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminLoginRouteImport } from './routes/admin.login'
@@ -17,6 +18,11 @@ import { Route as AdminLoginRouteImport } from './routes/admin.login'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CongcuRoute = CongcuRouteImport.update({
+  id: '/congcu',
+  path: '/congcu',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TinhluongRoute = TinhluongRouteImport.update({
@@ -37,12 +43,14 @@ const AdminLoginRoute = AdminLoginRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/congcu': typeof CongcuRoute
   '/tinhluong': typeof TinhluongRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/': typeof AdminIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/congcu': typeof CongcuRoute
   '/tinhluong': typeof TinhluongRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin': typeof AdminIndexRoute
@@ -50,20 +58,22 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/congcu': typeof CongcuRoute
   '/tinhluong': typeof TinhluongRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/': typeof AdminIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/tinhluong' | '/admin/login' | '/admin/'
+  fullPaths: '/' | '/congcu' | '/tinhluong' | '/admin/login' | '/admin/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/tinhluong' | '/admin/login' | '/admin'
-  id: '__root__' | '/' | '/tinhluong' | '/admin/login' | '/admin/'
+  to: '/' | '/congcu' | '/tinhluong' | '/admin/login' | '/admin'
+  id: '__root__' | '/' | '/congcu' | '/tinhluong' | '/admin/login' | '/admin/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CongcuRoute: typeof CongcuRoute
   TinhluongRoute: typeof TinhluongRoute
   AdminLoginRoute: typeof AdminLoginRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -76,6 +86,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/congcu': {
+      id: '/congcu'
+      path: '/congcu'
+      fullPath: '/congcu'
+      preLoaderRoute: typeof CongcuRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tinhluong': {
@@ -104,6 +121,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CongcuRoute: CongcuRoute,
   TinhluongRoute: TinhluongRoute,
   AdminLoginRoute: AdminLoginRoute,
   AdminIndexRoute: AdminIndexRoute,

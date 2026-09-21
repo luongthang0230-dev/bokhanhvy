@@ -22,9 +22,9 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "Lương Thắng — Cho đi là mất sạch" },
-      { name: "description", content: "Tải phần mềm miễn phí qua Google Drive, nhanh và an toàn." },
+      { name: "description", content: "Tải phần mềm miễn phí nhanh và an toàn." },
       { property: "og:title", content: "Lương Thắng — Cho đi là mất sạch" },
-      { property: "og:description", content: "Tải phần mềm miễn phí qua Google Drive, nhanh và an toàn." },
+      { property: "og:description", content: "Tải phần mềm miễn phí nhanh và an toàn." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -255,7 +255,7 @@ function SoftwareCard({ sw, index }: { sw: Software; index: number }) {
         disabled={!driveLink}
       >
         <Download className="mr-1 h-4 w-4" />
-        Tải xuống qua Google Drive
+        Tải xuống ngay
       </Button>
 
       {hasDescription && (

@@ -45,6 +45,9 @@ export function Header() {
           <Link to="/tinhluong" className={navLinkClass(pathname.startsWith("/tinhluong"))}>
             Tính lương
           </Link>
+          <Link to="/congcu" className={navLinkClass(pathname.startsWith("/congcu"))}>
+            Công cụ
+          </Link>
         </nav>
       </div>
     </header>
