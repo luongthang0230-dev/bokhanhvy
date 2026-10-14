@@ -80,3 +80,15 @@ cứ lúc nào (biểu hiện: lỗi `net::ERR_NAME_NOT_RESOLVED` khi gọi
 Các file trong `supabase/migrations/` vẫn được giữ lại để tham khảo lịch sử
 thay đổi, nhưng **`SETUP.sql` mới là file cần dùng** để dựng project mới từ
 đầu — nó đã gộp sẵn tất cả migration theo đúng thứ tự.
+
+## Thành viên app Auto Vạn Kiếp Hùng Ca (tab "Người dùng Auto")
+
+Đăng ký / đăng nhập / quản lý thành viên của app **Auto** chạy trên chính website này (không còn dùng kho GitHub).
+
+1. Supabase → **SQL Editor** → dán toàn bộ `AUTO_SETUP.sql` (hoặc `supabase/migrations/20261014000000_auto_members.sql`) → **Run**.
+2. Vercel cần thêm biến **`SUPABASE_SERVICE_ROLE_KEY`** (Supabase → Settings → API → *service_role*; **tuyệt đối không** đặt tên bắt đầu bằng `VITE_`).
+   Nếu tab "Người dùng CPK" đang chạy được thì biến này đã có sẵn.
+3. Deploy lại. API cho app nằm ở `https://<domain>/api/auto/*` (mô tả đầy đủ ở đầu file `src/lib/auto-api-route.ts`).
+4. Vào `/admin` → tab **Người dùng Auto** → bật *"Cho phép đăng ký tài khoản mới từ app Auto"* (mặc định ĐÓNG).
+5. Trong app Auto: `app/webapi.py` điền `WEB_BASE_URL = "https://<domain>"` rồi build; admin vào **Quản lý người dùng** → *Đăng nhập admin web*
+   (dùng email/mật khẩu admin của website) → *Nhập danh sách cũ lên web* (1 lần) để đưa thành viên cũ lên.

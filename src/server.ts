@@ -3,6 +3,7 @@ import "./lib/error-capture";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { handleCpkApiRequest } from "./lib/cpk-api-route";
+import { handleAutoApiRequest } from "./lib/auto-api-route";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -52,6 +53,11 @@ export default {
     // src/lib/cpk-api-route.ts để biết đầy đủ các endpoint.
     const cpkApiResponse = await handleCpkApiRequest(request);
     if (cpkApiResponse) return cpkApiResponse;
+
+    // Route REST thuần cho app desktop "Auto Vạn Kiếp Hùng Ca" (đăng ký / đăng nhập / phiên 1 thiết bị / quản lý
+    // thành viên) - xem src/lib/auto-api-route.ts.
+    const autoApiResponse = await handleAutoApiRequest(request);
+    if (autoApiResponse) return autoApiResponse;
 
     try {
       const handler = await getServerEntry();
