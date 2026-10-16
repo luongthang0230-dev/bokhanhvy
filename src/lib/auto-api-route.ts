@@ -155,6 +155,9 @@ export async function handleAutoApiRequest(request: Request): Promise<Response |
             days: num(body["days"]),
             max_accs: num(body["max_accs"], 2),
             status: (str(body["status"]) || undefined) as AutoStatus | undefined,
+            deny: Array.isArray(body["deny"])
+              ? (body["deny"] as unknown[]).filter((x): x is string => typeof x === "string")
+              : undefined,
           }),
         );
       case "admin/update": {

@@ -20,6 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { supabase } from "@/integrations/supabase/client";
 import {
   AUTO_FEATURES,
+  AUTO_TIERS,
   AUTO_EXTRAS,
   autoAdminList,
   autoAdminCreate,
@@ -362,8 +363,11 @@ export function AdminAutoUsers() {
                       ({rem.text})
                     </span>{" "}
                     · Đăng nhập gần nhất {formatDate(u.lastLoginAt)}
-                    {u.deny.filter((x) => !x.startsWith("grant_")).length > 0 && (
-                      <> · Khoá {u.deny.filter((x) => !x.startsWith("grant_")).length} tính năng</>
+                    {AUTO_TIERS.find((t) => u.deny.includes(t.key)) && (
+                      <> · Gói {AUTO_TIERS.find((t) => u.deny.includes(t.key))?.label}</>
+                    )}
+                    {u.deny.filter((x) => !x.startsWith("grant_") && !x.startsWith("tier_")).length > 0 && (
+                      <> · Khoá {u.deny.filter((x) => !x.startsWith("grant_") && !x.startsWith("tier_")).length} tính năng</>
                     )}
                     {u.deny.includes("grant_autosell") && <> · VIP tự bán</>}
                   </p>
