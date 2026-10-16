@@ -33,10 +33,30 @@ export const AUTO_FEATURES = [
   { key: "remember_train", label: "Ghi nhớ map train & quay lại bãi" },
   { key: "fly_pill", label: "Ưu tiên Khinh Công Đan" },
   { key: "skip_boss", label: "Bỏ qua nhiệm vụ đánh Boss" },
+  { key: "hide", label: "Ẩn nhân vật / Ẩn auto" },
 ] as const;
 /** Quyền "cộng thêm" (mặc định TẮT): có token trong mảng deny = được cấp. Khớp EXTRAS trong app/auth.py. */
 export const AUTO_EXTRAS = [{ key: "grant_autosell", label: "VIP: Tự bán nguyên liệu đã nhặt (tab Nhặt)" }] as const;
-const FEATURE_KEYS: string[] = [...AUTO_FEATURES.map((f) => f.key), ...AUTO_EXTRAS.map((f) => f.key)];
+/** Gói (name tag). Lưu trong mảng deny dưới dạng mã tier_*. Khớp TIERS / TIER_LIMIT / TIER_DENY trong app/auth.py. */
+export const AUTO_TIERS = [
+  { key: "nongdan", token: "tier_nongdan", label: "Nông dân", maxAccs: 2, deny: ["gather", "remember_train", "fly_pill", "hide"] },
+  { key: "nhagiau", token: "tier_nhagiau", label: "Nhà giàu", maxAccs: 2, deny: ["remember_train", "fly_pill"] },
+  { key: "daigia", token: "tier_daigia", label: "Đại gia", maxAccs: 0, deny: [] as string[] },
+] as const;
+const TIER_TOKENS: string[] = AUTO_TIERS.map((t) => t.token);
+const FEATURE_KEYS: string[] = [
+  ...AUTO_FEATURES.map((f) => f.key),
+  ...AUTO_EXTRAS.map((f) => f.key),
+  ...TIER_TOKENS,
+];
+/** Lọc deny: chỉ giữ mã hợp lệ, và nếu có nhiều mã gói thì giữ gói CAO NHẤT. */
+export function cleanDeny(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  const out = new Set<string>(input.filter((x): x is string => typeof x === "string" && FEATURE_KEYS.includes(x)));
+  const top = [...TIER_TOKENS].reverse().find((k) => out.has(k));
+  for (const k of TIER_TOKENS) if (k !== top) out.delete(k);
+  return [...out].sort();
+}
 
 export type AutoStatus = "trial" | "active" | "disabled" | "pending";
 const STATUSES: string[] = ["trial", "active", "disabled", "pending"];
@@ -172,7 +192,7 @@ function profileOf(m: MemberDb): AutoProfile {
     status: m.status,
     expires: expiresSec(m),
     max_accs: Number.isFinite(m.max_accs) ? m.max_accs : 2,
-    deny: (m.deny ?? []).filter((x) => FEATURE_KEYS.includes(x)),
+    deny: cleanDeny(m.deny ?? []),
   };
 }
 
@@ -636,7 +656,7 @@ function toRow(
     status: m.status,
     expiresAt: m.expires_at,
     maxAccs: m.max_accs,
-    deny: (m.deny ?? []).filter((x) => FEATURE_KEYS.includes(x)),
+    deny: cleanDeny(m.deny ?? []),
     createdAt: m.created_at,
     lastLoginAt: m.last_login_at,
     migrated: !!m.user_id,
@@ -757,7 +777,7 @@ export async function autoAdminUpdateCore(
   if (input.max_accs !== undefined)
     patch["max_accs"] = Math.max(0, Math.floor(Number(input.max_accs) || 0));
   if (input.deny !== undefined)
-    patch["deny"] = Array.from(new Set(input.deny.filter((x) => FEATURE_KEYS.includes(x)))).sort();
+    patch["deny"] = cleanDeny(input.deny);
   if (input.expiry !== undefined) {
     const days = Math.max(0, Math.floor(Number(input.expiry.days) || 0));
     if (!days) {
@@ -913,7 +933,7 @@ export async function autoAdminImportCore(
       status: STATUSES.includes(r.status ?? "") ? r.status : "active",
       expires_at: Number.isFinite(exp) && exp > 0 ? isoOrNull(Math.floor(exp)) : null,
       max_accs: r.max_accs === undefined ? 2 : Math.max(0, Math.floor(Number(r.max_accs) || 0)),
-      deny: Array.isArray(r.deny) ? r.deny.filter((x) => FEATURE_KEYS.includes(x)) : [],
+      deny: cleanDeny(r.deny),
       legacy_salt: r.salt.toLowerCase(),
       legacy_iter: iter,
       legacy_hash: r.hash.toLowerCase(),
