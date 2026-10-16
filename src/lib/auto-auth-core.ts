@@ -38,34 +38,6 @@ export const AUTO_FEATURES = [
 export const AUTO_EXTRAS = [{ key: "grant_autosell", label: "VIP: Tự bán nguyên liệu đã nhặt (tab Nhặt)" }] as const;
 const FEATURE_KEYS: string[] = [...AUTO_FEATURES.map((f) => f.key), ...AUTO_EXTRAS.map((f) => f.key)];
 
-/**
- * GÓI của thành viên (Nông dân < Nhà giàu < Đại gia). App không có cột "gói" riêng: nó gửi 1 mã `tier_*` nằm trong mảng `deny`.
- * Thứ tự từ thấp lên cao — khi có nhiều mã chỉ giữ gói CAO NHẤT (app cũng lấy gói cao nhất).
- */
-export const AUTO_TIERS = [
-  { key: "tier_nongdan", label: "Nông dân" },
-  { key: "tier_nhagiau", label: "Nhà giàu" },
-  { key: "tier_daigia", label: "Đại gia" },
-] as const;
-const TIER_KEYS: string[] = AUTO_TIERS.map((t) => t.key);
-
-/**
- * Bộ lọc `deny` DUY NHẤT cho mọi nơi: ghi (admin/update, admin/create, admin/import), đọc (admin/list) và dựng hồ sơ
- * (login, me). Giữ tên tính năng + quyền cộng thêm đã biết, và tối đa 1 mã gói (gói cao nhất). Mã lạ bị bỏ.
- * Chỉ các API ADMIN được ghi mã `tier_*`; API công khai (register) không nhận `deny` từ người dùng.
- */
-export function cleanDeny(input: unknown): string[] {
-  if (!Array.isArray(input)) return [];
-  const out = new Set<string>();
-  for (const x of input) {
-    if (typeof x !== "string") continue;
-    if (FEATURE_KEYS.includes(x) || TIER_KEYS.includes(x)) out.add(x);
-  }
-  const top = [...TIER_KEYS].reverse().find((k) => out.has(k));
-  for (const k of TIER_KEYS) if (k !== top) out.delete(k);
-  return [...out].sort();
-}
-
 export type AutoStatus = "trial" | "active" | "disabled" | "pending";
 const STATUSES: string[] = ["trial", "active", "disabled", "pending"];
 
@@ -119,6 +91,7 @@ export interface AutoMemberRow {
 export interface AutoSettings {
   registration_open: boolean;
   contact: string;
+  pricing: string; // bảng giá (JSON do admin soạn trong app); rỗng = dùng ảnh mặc định
 }
 
 type Fail = { ok: false; error: string; code?: "auth" | "busy" };
@@ -133,6 +106,7 @@ export type AutoLoginResult =
       profile?: AutoProfile;
       server_time: number;
       contact: string;
+      pricing?: string;
     }>
   | Fail;
 
@@ -198,7 +172,7 @@ function profileOf(m: MemberDb): AutoProfile {
     status: m.status,
     expires: expiresSec(m),
     max_accs: Number.isFinite(m.max_accs) ? m.max_accs : 2,
-    deny: cleanDeny(m.deny),
+    deny: (m.deny ?? []).filter((x) => FEATURE_KEYS.includes(x)),
   };
 }
 
@@ -211,6 +185,7 @@ async function getSettingsCore(): Promise<AutoSettings> {
   return {
     registration_open: map.get("registration_open") === true, // mặc định ĐÓNG (giống app cũ)
     contact: typeof map.get("contact") === "string" ? (map.get("contact") as string) : "",
+    pricing: typeof map.get("pricing") === "string" ? (map.get("pricing") as string) : "",
   };
 }
 
@@ -305,13 +280,14 @@ async function verifyLegacy(m: MemberDb, password: string): Promise<boolean> {
 // Công khai: trạng thái đăng ký / đăng ký / đăng nhập / làm mới
 // ---------------------------------------------------------------------------------------------------------------
 export async function autoPublicStatusCore(): Promise<
-  Ok<{ registration_open: boolean; contact: string; server_time: number }>
+  Ok<{ registration_open: boolean; contact: string; pricing: string; server_time: number }>
 > {
   const s = await getSettingsCore();
   return {
     ok: true,
     registration_open: s.registration_open,
     contact: s.contact,
+    pricing: s.pricing,
     server_time: nowS(),
   };
 }
@@ -439,6 +415,7 @@ export async function autoLoginCore(
       message: ev.message,
       server_time: nowS(),
       contact: settings.contact,
+      pricing: settings.pricing,
     };
   }
   await sb.from("auto_members").update({ last_login_at: new Date().toISOString() }).eq("id", m.id);
@@ -451,6 +428,7 @@ export async function autoLoginCore(
     profile: profileOf(m),
     server_time: nowS(),
     contact: settings.contact,
+    pricing: settings.pricing,
   };
 }
 
@@ -502,6 +480,7 @@ export async function autoMeCore(
       profile: AutoProfile;
       server_time: number;
       contact: string;
+      pricing?: string;
     }>
   | Fail
 > {
@@ -516,6 +495,7 @@ export async function autoMeCore(
     profile: profileOf(who.member),
     server_time: nowS(),
     contact: settings.contact,
+    pricing: settings.pricing,
   };
 }
 
@@ -656,7 +636,7 @@ function toRow(
     status: m.status,
     expiresAt: m.expires_at,
     maxAccs: m.max_accs,
-    deny: cleanDeny(m.deny),
+    deny: (m.deny ?? []).filter((x) => FEATURE_KEYS.includes(x)),
     createdAt: m.created_at,
     lastLoginAt: m.last_login_at,
     migrated: !!m.user_id,
@@ -710,8 +690,6 @@ export interface AutoCreateInput {
   /** 0 = không giới hạn. */
   max_accs: number;
   status?: AutoStatus | undefined;
-  /** Tuỳ chọn (chỉ admin): quyền / mã gói `tier_*` ngay lúc tạo. */
-  deny?: string[] | undefined;
 }
 
 export async function autoAdminCreateCore(
@@ -740,7 +718,6 @@ export async function autoAdminCreateCore(
     status,
     expires_at: days ? new Date(Date.now() + days * 86400 * 1000).toISOString() : null,
     max_accs: maxAccs,
-    deny: cleanDeny(input.deny),
   });
   if (error) {
     await sb.auth.admin.deleteUser(created.id);
@@ -780,7 +757,7 @@ export async function autoAdminUpdateCore(
   if (input.max_accs !== undefined)
     patch["max_accs"] = Math.max(0, Math.floor(Number(input.max_accs) || 0));
   if (input.deny !== undefined)
-    patch["deny"] = cleanDeny(input.deny);
+    patch["deny"] = Array.from(new Set(input.deny.filter((x) => FEATURE_KEYS.includes(x)))).sort();
   if (input.expiry !== undefined) {
     const days = Math.max(0, Math.floor(Number(input.expiry.days) || 0));
     if (!days) {
@@ -869,7 +846,11 @@ export async function autoAdminKickCore(
 
 export async function autoAdminSetSettingsCore(
   accessToken: string,
-  patch: { registration_open?: boolean | undefined; contact?: string | undefined },
+  patch: {
+    registration_open?: boolean | undefined;
+    contact?: string | undefined;
+    pricing?: string | undefined;
+  },
 ): Promise<Ok<{ settings: AutoSettings }> | Fail> {
   const check = await requireCallerIsAdmin(accessToken);
   if (!check.ok) return check;
@@ -880,6 +861,8 @@ export async function autoAdminSetSettingsCore(
     rows.push({ key: "registration_open", value: patch.registration_open, updated_at: at });
   if (typeof patch.contact === "string")
     rows.push({ key: "contact", value: patch.contact.trim().slice(0, 200), updated_at: at });
+  if (typeof patch.pricing === "string")
+    rows.push({ key: "pricing", value: patch.pricing.slice(0, 20000), updated_at: at });
   if (rows.length) {
     const { error } = await sb.from("auto_settings").upsert(rows);
     if (error) return { ok: false, error: error.message };
@@ -930,7 +913,7 @@ export async function autoAdminImportCore(
       status: STATUSES.includes(r.status ?? "") ? r.status : "active",
       expires_at: Number.isFinite(exp) && exp > 0 ? isoOrNull(Math.floor(exp)) : null,
       max_accs: r.max_accs === undefined ? 2 : Math.max(0, Math.floor(Number(r.max_accs) || 0)),
-      deny: cleanDeny(r.deny),
+      deny: Array.isArray(r.deny) ? r.deny.filter((x) => FEATURE_KEYS.includes(x)) : [],
       legacy_salt: r.salt.toLowerCase(),
       legacy_iter: iter,
       legacy_hash: r.hash.toLowerCase(),

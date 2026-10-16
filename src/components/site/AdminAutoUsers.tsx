@@ -20,7 +20,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { supabase } from "@/integrations/supabase/client";
 import {
   AUTO_FEATURES,
-  AUTO_TIERS,
   AUTO_EXTRAS,
   autoAdminList,
   autoAdminCreate,
@@ -363,11 +362,8 @@ export function AdminAutoUsers() {
                       ({rem.text})
                     </span>{" "}
                     · Đăng nhập gần nhất {formatDate(u.lastLoginAt)}
-                    {AUTO_TIERS.find((t) => u.deny.includes(t.key)) && (
-                      <> · Gói {AUTO_TIERS.find((t) => u.deny.includes(t.key))?.label}</>
-                    )}
-                    {u.deny.filter((x) => !x.startsWith("grant_") && !x.startsWith("tier_")).length > 0 && (
-                      <> · Khoá {u.deny.filter((x) => !x.startsWith("grant_") && !x.startsWith("tier_")).length} tính năng</>
+                    {u.deny.filter((x) => !x.startsWith("grant_")).length > 0 && (
+                      <> · Khoá {u.deny.filter((x) => !x.startsWith("grant_")).length} tính năng</>
                     )}
                     {u.deny.includes("grant_autosell") && <> · VIP tự bán</>}
                   </p>
@@ -475,24 +471,6 @@ function Select({
   );
 }
 
-/** Chọn GÓI (name tag): lưu thành 1 mã `tier_*` trong mảng deny (app đọc mã này). "" = chưa phân gói. */
-function TierSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  return (
-    <select
-      className="h-10 w-full rounded-md border bg-background px-2 text-sm"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-    >
-      <option value="">(Chưa phân gói)</option>
-      {AUTO_TIERS.map((t) => (
-        <option key={t.key} value={t.key}>
-          {t.label}
-        </option>
-      ))}
-    </select>
-  );
-}
-
 /** Cài đặt tài khoản: trạng thái, số acc, quyền từng tính năng (giống UserDialog trong app). */
 function EditDialog({
   user,
@@ -508,7 +486,6 @@ function EditDialog({
   const [status, setStatus] = useState<AutoStatus>("active");
   const [maxAccs, setMaxAccs] = useState(2);
   const [deny, setDeny] = useState<string[]>([]);
-  const [tier, setTier] = useState("");
   const [resetExp, setResetExp] = useState(false);
   const [days, setDays] = useState(30);
   const [busy, setBusy] = useState(false);
@@ -517,8 +494,7 @@ function EditDialog({
     if (!user) return;
     setStatus(user.status === "pending" ? "trial" : user.status);
     setMaxAccs(user.maxAccs);
-    setDeny(user.deny.filter((x) => !x.startsWith("tier_"))); // mã gói tách riêng (ô "Gói"), không lẫn với ô tick quyền
-    setTier(AUTO_TIERS.find((t) => user.deny.includes(t.key))?.key ?? "");
+    setDeny(user.deny);
     setResetExp(false);
     setDays(30);
   }, [user]);
@@ -536,7 +512,7 @@ function EditDialog({
           username: user.username,
           status,
           max_accs: maxAccs,
-          deny: tier ? [...deny.filter((x) => !x.startsWith("tier_")), tier] : deny.filter((x) => !x.startsWith("tier_")),
+          deny,
           ...(resetExp ? { expiry: { days, extend: false } } : {}),
         },
       },
@@ -577,13 +553,6 @@ function EditDialog({
               <Label className="mb-1 block text-xs">Số acc game được mở</Label>
               <Select value={maxAccs} onChange={setMaxAccs} options={ACC_CHOICES} />
             </div>
-          </div>
-          <div>
-            <Label className="mb-1 block text-xs">Gói (name tag)</Label>
-            <TierSelect value={tier} onChange={setTier} />
-            <p className="mt-1 text-xs text-muted-foreground">
-              Chỉ gán nhãn gói cho thành viên. Số acc và quyền tính năng chỉnh riêng ở các ô bên dưới.
-            </p>
           </div>
           <div className="flex items-center gap-3">
             <Checkbox
@@ -771,7 +740,6 @@ function CreateDialog({
   const [password, setPassword] = useState("");
   const [days, setDays] = useState(30);
   const [maxAccs, setMaxAccs] = useState(2);
-  const [tier, setTier] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (open) {
@@ -779,7 +747,6 @@ function CreateDialog({
       setPassword("");
       setDays(30);
       setMaxAccs(2);
-      setTier("");
     }
   }, [open]);
 
@@ -789,7 +756,7 @@ function CreateDialog({
     if (!token) return;
     setBusy(true);
     const res = await autoAdminCreate({
-      data: { access_token: token, input: { username, password, days, max_accs: maxAccs, ...(tier ? { deny: [tier] } : {}) } },
+      data: { access_token: token, input: { username, password, days, max_accs: maxAccs } },
     });
     setBusy(false);
     if (!res.ok) {
@@ -823,7 +790,6 @@ function CreateDialog({
             <Select value={days} onChange={setDays} options={EXPIRY_CHOICES} />
             <Select value={maxAccs} onChange={setMaxAccs} options={ACC_CHOICES} />
           </div>
-          <TierSelect value={tier} onChange={setTier} />
           <Button type="submit" className="w-full" disabled={busy}>
             {busy ? "Đang tạo..." : "Thêm"}
           </Button>
