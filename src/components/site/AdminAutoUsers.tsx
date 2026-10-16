@@ -20,6 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { supabase } from "@/integrations/supabase/client";
 import {
   AUTO_FEATURES,
+  AUTO_EXTRAS,
   autoAdminList,
   autoAdminCreate,
   autoAdminUpdate,
@@ -361,7 +362,10 @@ export function AdminAutoUsers() {
                       ({rem.text})
                     </span>{" "}
                     · Đăng nhập gần nhất {formatDate(u.lastLoginAt)}
-                    {u.deny.length > 0 && <> · Khoá {u.deny.length} tính năng</>}
+                    {u.deny.filter((x) => !x.startsWith("grant_")).length > 0 && (
+                      <> · Khoá {u.deny.filter((x) => !x.startsWith("grant_")).length} tính năng</>
+                    )}
+                    {u.deny.includes("grant_autosell") && <> · VIP tự bán</>}
                   </p>
                 </div>
                 <Button
@@ -575,6 +579,17 @@ function EditDialog({
                     }
                   />
                   {f.label}
+                </label>
+              ))}
+              {AUTO_EXTRAS.map((f) => (
+                <label key={f.key} className="flex items-center gap-2 text-sm font-medium sm:col-span-2">
+                  <Checkbox
+                    checked={deny.includes(f.key)}
+                    onCheckedChange={(v) =>
+                      setDeny((d) => (v === true ? [...d.filter((x) => x !== f.key), f.key] : d.filter((x) => x !== f.key)))
+                    }
+                  />
+                  {f.label} (cấp quyền = tick)
                 </label>
               ))}
             </div>

@@ -10,6 +10,7 @@ import {
   autoAdminKickCore,
   autoAdminSetSettingsCore,
   AUTO_FEATURES,
+  AUTO_EXTRAS,
   type AutoCreateInput,
   type AutoUpdateInput,
   type AutoMemberRow,
@@ -17,7 +18,7 @@ import {
   type AutoStatus,
 } from "@/lib/auto-auth-core";
 
-export { AUTO_FEATURES };
+export { AUTO_FEATURES, AUTO_EXTRAS };
 export type { AutoMemberRow, AutoSettings, AutoStatus, AutoCreateInput, AutoUpdateInput };
 
 export const autoAdminList = createServerFn({ method: "POST" })

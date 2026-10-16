@@ -34,7 +34,9 @@ export const AUTO_FEATURES = [
   { key: "fly_pill", label: "Ưu tiên Khinh Công Đan" },
   { key: "skip_boss", label: "Bỏ qua nhiệm vụ đánh Boss" },
 ] as const;
-const FEATURE_KEYS: string[] = AUTO_FEATURES.map((f) => f.key);
+/** Quyền "cộng thêm" (mặc định TẮT): có token trong mảng deny = được cấp. Khớp EXTRAS trong app/auth.py. */
+export const AUTO_EXTRAS = [{ key: "grant_autosell", label: "VIP: Tự bán nguyên liệu đã nhặt (tab Nhặt)" }] as const;
+const FEATURE_KEYS: string[] = [...AUTO_FEATURES.map((f) => f.key), ...AUTO_EXTRAS.map((f) => f.key)];
 
 export type AutoStatus = "trial" | "active" | "disabled" | "pending";
 const STATUSES: string[] = ["trial", "active", "disabled", "pending"];
