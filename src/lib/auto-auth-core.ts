@@ -34,13 +34,14 @@ export const AUTO_FEATURES = [
   { key: "fly_pill", label: "Ưu tiên Khinh Công Đan" },
   { key: "skip_boss", label: "Bỏ qua nhiệm vụ đánh Boss" },
   { key: "hide", label: "Ẩn nhân vật / Ẩn auto" },
+  { key: "activity", label: "Hỏi đáp theo khung giờ + Lôi đài & sự kiện" },
 ] as const;
 /** Quyền "cộng thêm" (mặc định TẮT): có token trong mảng deny = được cấp. Khớp EXTRAS trong app/auth.py. */
 export const AUTO_EXTRAS = [{ key: "grant_autosell", label: "VIP: Tự bán nguyên liệu đã nhặt (tab Nhặt)" }] as const;
 /** Gói (name tag). Lưu trong mảng deny dưới dạng mã tier_*. Khớp TIERS / TIER_LIMIT / TIER_DENY trong app/auth.py. */
 export const AUTO_TIERS = [
-  { key: "nongdan", token: "tier_nongdan", label: "Nông dân", maxAccs: 2, deny: ["gather", "remember_train", "fly_pill", "hide"] },
-  { key: "nhagiau", token: "tier_nhagiau", label: "Nhà giàu", maxAccs: 2, deny: ["remember_train", "fly_pill"] },
+  { key: "nongdan", token: "tier_nongdan", label: "Nông dân", maxAccs: 2, deny: ["gather", "remember_train", "fly_pill", "hide", "activity"] },
+  { key: "nhagiau", token: "tier_nhagiau", label: "Nhà giàu", maxAccs: 2, deny: ["remember_train", "fly_pill", "activity"] },
   { key: "daigia", token: "tier_daigia", label: "Đại gia", maxAccs: 0, deny: [] as string[] },
 ] as const;
 const TIER_TOKENS: string[] = AUTO_TIERS.map((t) => t.token);
