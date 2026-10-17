@@ -12,6 +12,7 @@ import {
   AUTO_FEATURES,
   AUTO_EXTRAS,
   AUTO_TIERS,
+  autoTierOf,
   type AutoCreateInput,
   type AutoUpdateInput,
   type AutoMemberRow,
@@ -19,7 +20,7 @@ import {
   type AutoStatus,
 } from "@/lib/auto-auth-core";
 
-export { AUTO_FEATURES, AUTO_EXTRAS, AUTO_TIERS };
+export { AUTO_FEATURES, AUTO_EXTRAS, AUTO_TIERS, autoTierOf };
 export type { AutoMemberRow, AutoSettings, AutoStatus, AutoCreateInput, AutoUpdateInput };
 
 export const autoAdminList = createServerFn({ method: "POST" })
@@ -54,13 +55,11 @@ export const autoAdminSetSettings = createServerFn({ method: "POST" })
       access_token: string;
       registration_open?: boolean | undefined;
       contact?: string | undefined;
-      pricing?: string | undefined;
     }) => d,
   )
   .handler(async ({ data }) =>
     autoAdminSetSettingsCore(data.access_token, {
       registration_open: data.registration_open,
       contact: data.contact,
-      pricing: data.pricing,
     }),
   );

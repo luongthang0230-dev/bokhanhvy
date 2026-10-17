@@ -33,27 +33,40 @@ export const AUTO_FEATURES = [
   { key: "remember_train", label: "Ghi nhớ map train & quay lại bãi" },
   { key: "fly_pill", label: "Ưu tiên Khinh Công Đan" },
   { key: "skip_boss", label: "Bỏ qua nhiệm vụ đánh Boss" },
-  { key: "hide", label: "Ẩn nhân vật / Ẩn auto" },
-  { key: "activity", label: "Hỏi đáp theo khung giờ + Lôi đài & sự kiện" },
+  { key: "hide", label: "Ẩn nhân vật / Ẩn auto (ẩn cửa sổ game, ẩn xuống khay)" },
 ] as const;
 /** Quyền "cộng thêm" (mặc định TẮT): có token trong mảng deny = được cấp. Khớp EXTRAS trong app/auth.py. */
 export const AUTO_EXTRAS = [{ key: "grant_autosell", label: "VIP: Tự bán nguyên liệu đã nhặt (tab Nhặt)" }] as const;
-/** Gói (name tag). Lưu trong mảng deny dưới dạng mã tier_*. Khớp TIERS / TIER_LIMIT / TIER_DENY trong app/auth.py. */
+const FEATURE_KEYS: string[] = [...AUTO_FEATURES.map((f) => f.key), ...AUTO_EXTRAS.map((f) => f.key)];
+
+/**
+ * GÓI (name tag): app admin gán gói cho thành viên bằng 1 MÃ nằm trong mảng `deny` (không có cột riêng).
+ * Khớp TIERS / TIER_TOKEN trong app/auth.py. Thứ tự THẤP → CAO.
+ */
 export const AUTO_TIERS = [
-  { key: "nongdan", token: "tier_nongdan", label: "Nông dân", maxAccs: 2, deny: ["gather", "remember_train", "fly_pill", "hide", "activity"] },
-  { key: "nhagiau", token: "tier_nhagiau", label: "Nhà giàu", maxAccs: 2, deny: ["remember_train", "fly_pill", "activity"] },
-  { key: "daigia", token: "tier_daigia", label: "Đại gia", maxAccs: 0, deny: [] as string[] },
+  { key: "nongdan", token: "tier_nongdan", label: "Nông dân" },
+  { key: "nhagiau", token: "tier_nhagiau", label: "Nhà giàu" },
+  { key: "daigia", token: "tier_daigia", label: "Đại gia" },
 ] as const;
 const TIER_TOKENS: string[] = AUTO_TIERS.map((t) => t.token);
-const FEATURE_KEYS: string[] = [
-  ...AUTO_FEATURES.map((f) => f.key),
-  ...AUTO_EXTRAS.map((f) => f.key),
-  ...TIER_TOKENS,
-];
-/** Lọc deny: chỉ giữ mã hợp lệ, và nếu có nhiều mã gói thì giữ gói CAO NHẤT. */
+
+/** Gói (cao nhất) của 1 mảng deny; null = chưa phân gói. */
+export function autoTierOf(deny: readonly string[] | null | undefined) {
+  const d = new Set(deny ?? []);
+  return [...AUTO_TIERS].reverse().find((t) => d.has(t.token)) ?? null;
+}
+
+/**
+ * MỘT bộ lọc `deny` duy nhất cho MỌI nơi: ghi (admin/update, admin/create, nhập), đọc (admin/list) và dựng hồ sơ trả cho
+ * thành viên (login, me). Giữ: tên tính năng hợp lệ + mã gói tier_*. Có nhiều mã gói thì chỉ giữ gói CAO NHẤT (app cũng lấy gói cao nhất).
+ * Mọi thứ khác (chuỗi lạ, không phải chuỗi) bị bỏ. Đừng tự lọc deny ở chỗ khác - sót 1 nơi là gói mất ở nơi đó.
+ */
 export function cleanDeny(input: unknown): string[] {
   if (!Array.isArray(input)) return [];
-  const out = new Set<string>(input.filter((x): x is string => typeof x === "string" && FEATURE_KEYS.includes(x)));
+  const out = new Set<string>();
+  for (const x of input) {
+    if (typeof x === "string" && (FEATURE_KEYS.includes(x) || TIER_TOKENS.includes(x))) out.add(x);
+  }
   const top = [...TIER_TOKENS].reverse().find((k) => out.has(k));
   for (const k of TIER_TOKENS) if (k !== top) out.delete(k);
   return [...out].sort();
@@ -112,7 +125,6 @@ export interface AutoMemberRow {
 export interface AutoSettings {
   registration_open: boolean;
   contact: string;
-  pricing: string; // bảng giá (JSON do admin soạn trong app); rỗng = dùng ảnh mặc định
 }
 
 type Fail = { ok: false; error: string; code?: "auth" | "busy" };
@@ -127,7 +139,6 @@ export type AutoLoginResult =
       profile?: AutoProfile;
       server_time: number;
       contact: string;
-      pricing?: string;
     }>
   | Fail;
 
@@ -189,16 +200,11 @@ function expiresSec(m: MemberDb): number | null {
 }
 
 function profileOf(m: MemberDb): AutoProfile {
-  // Tài khoản DÙNG THỬ được dùng mọi tính năng của gói Đại gia (không giới hạn acc). Hết hạn dùng thử thì bị khoá như cũ;
-  // admin chuyển sang "active" thì hết đặc quyền này và theo gói admin gán.
-  const trial = m.status === "trial";
   return {
     status: m.status,
     expires: expiresSec(m),
-    max_accs: trial ? 0 : Number.isFinite(m.max_accs) ? m.max_accs : 2,
-    deny: cleanDeny(
-      trial ? [...(m.deny ?? []).filter((x) => x.startsWith("grant_")), "tier_daigia"] : (m.deny ?? []),
-    ),
+    max_accs: Number.isFinite(m.max_accs) ? m.max_accs : 2,
+    deny: cleanDeny(m.deny),
   };
 }
 
@@ -211,7 +217,6 @@ async function getSettingsCore(): Promise<AutoSettings> {
   return {
     registration_open: map.get("registration_open") === true, // mặc định ĐÓNG (giống app cũ)
     contact: typeof map.get("contact") === "string" ? (map.get("contact") as string) : "",
-    pricing: typeof map.get("pricing") === "string" ? (map.get("pricing") as string) : "",
   };
 }
 
@@ -306,14 +311,13 @@ async function verifyLegacy(m: MemberDb, password: string): Promise<boolean> {
 // Công khai: trạng thái đăng ký / đăng ký / đăng nhập / làm mới
 // ---------------------------------------------------------------------------------------------------------------
 export async function autoPublicStatusCore(): Promise<
-  Ok<{ registration_open: boolean; contact: string; pricing: string; server_time: number }>
+  Ok<{ registration_open: boolean; contact: string; server_time: number }>
 > {
   const s = await getSettingsCore();
   return {
     ok: true,
     registration_open: s.registration_open,
     contact: s.contact,
-    pricing: s.pricing,
     server_time: nowS(),
   };
 }
@@ -323,7 +327,6 @@ export async function autoRegisterCore(
   password: string,
   fp: string,
   ip: string,
-  fpsRaw?: unknown,
 ): Promise<Ok<{ message: string }> | Fail> {
   const settings = await getSettingsCore();
   if (!settings.registration_open) {
@@ -347,17 +350,12 @@ export async function autoRegisterCore(
   if (await findMember(username)) return { ok: false, error: "Tên đăng nhập này đã tồn tại." };
 
   const lien = settings.contact ? `\nLiên hệ Admin để được kích hoạt: ${settings.contact}` : "";
-  // Nhiều mã nhận dạng máy độc lập (MachineGuid / ổ đĩa / card mạng...): trùng BẤT KỲ mã nào = máy này đã dùng thử -> không đăng ký lại được
-  // dù xoá app, cài lại, đổi tên máy hay đổi tài khoản Windows.
-  const fpList = [
-    ...new Set(
-      [fp, ...(Array.isArray(fpsRaw) ? fpsRaw : [])]
-        .filter((x): x is string => typeof x === "string" && /^[a-f0-9]{16,64}$/i.test(x))
-        .map((x) => x.toLowerCase()),
-    ),
-  ].slice(0, 12);
-  const { data: usedRows } = await sb.from("auto_trials").select("fp").in("fp", fpList).limit(1);
-  if (usedRows && usedRows.length) return { ok: false, error: "Máy này đã dùng thử rồi." + lien };
+  const { data: usedFp } = await sb
+    .from("auto_trials")
+    .select("fp")
+    .eq("fp", fp.toLowerCase())
+    .maybeSingle();
+  if (usedFp) return { ok: false, error: "Máy này đã dùng thử rồi." + lien };
 
   if (ip) {
     const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
@@ -391,10 +389,7 @@ export async function autoRegisterCore(
       return { ok: false, error: "Tên đăng nhập này đã tồn tại." };
     return { ok: false, error: insErr.message || "Không tạo được tài khoản." };
   }
-  await sb
-    .from("auto_trials")
-    // chỉ dòng đầu mang IP: giới hạn đăng ký theo IP vẫn đếm đúng 1 lượt
-    .upsert(fpList.map((f, i) => ({ fp: f, username, ip: i === 0 ? ip || null : null })));
+  await sb.from("auto_trials").upsert({ fp: fp.toLowerCase(), username, ip: ip || null });
   return { ok: true, message: `Đăng ký thành công! Bạn được dùng thử ${AUTO_TRIAL_DAYS} ngày.` };
 }
 
@@ -450,7 +445,6 @@ export async function autoLoginCore(
       message: ev.message,
       server_time: nowS(),
       contact: settings.contact,
-      pricing: settings.pricing,
     };
   }
   await sb.from("auto_members").update({ last_login_at: new Date().toISOString() }).eq("id", m.id);
@@ -463,7 +457,6 @@ export async function autoLoginCore(
     profile: profileOf(m),
     server_time: nowS(),
     contact: settings.contact,
-    pricing: settings.pricing,
   };
 }
 
@@ -515,7 +508,6 @@ export async function autoMeCore(
       profile: AutoProfile;
       server_time: number;
       contact: string;
-      pricing?: string;
     }>
   | Fail
 > {
@@ -530,7 +522,6 @@ export async function autoMeCore(
     profile: profileOf(who.member),
     server_time: nowS(),
     contact: settings.contact,
-    pricing: settings.pricing,
   };
 }
 
@@ -671,7 +662,7 @@ function toRow(
     status: m.status,
     expiresAt: m.expires_at,
     maxAccs: m.max_accs,
-    deny: cleanDeny(m.deny ?? []),
+    deny: cleanDeny(m.deny),
     createdAt: m.created_at,
     lastLoginAt: m.last_login_at,
     migrated: !!m.user_id,
@@ -725,6 +716,8 @@ export interface AutoCreateInput {
   /** 0 = không giới hạn. */
   max_accs: number;
   status?: AutoStatus | undefined;
+  /** Quyền / mã gói ban đầu (tuỳ chọn). Đi qua cleanDeny. */
+  deny?: string[] | undefined;
 }
 
 export async function autoAdminCreateCore(
@@ -753,6 +746,7 @@ export async function autoAdminCreateCore(
     status,
     expires_at: days ? new Date(Date.now() + days * 86400 * 1000).toISOString() : null,
     max_accs: maxAccs,
+    deny: cleanDeny(input.deny),
   });
   if (error) {
     await sb.auth.admin.deleteUser(created.id);
@@ -881,11 +875,7 @@ export async function autoAdminKickCore(
 
 export async function autoAdminSetSettingsCore(
   accessToken: string,
-  patch: {
-    registration_open?: boolean | undefined;
-    contact?: string | undefined;
-    pricing?: string | undefined;
-  },
+  patch: { registration_open?: boolean | undefined; contact?: string | undefined },
 ): Promise<Ok<{ settings: AutoSettings }> | Fail> {
   const check = await requireCallerIsAdmin(accessToken);
   if (!check.ok) return check;
@@ -896,8 +886,6 @@ export async function autoAdminSetSettingsCore(
     rows.push({ key: "registration_open", value: patch.registration_open, updated_at: at });
   if (typeof patch.contact === "string")
     rows.push({ key: "contact", value: patch.contact.trim().slice(0, 200), updated_at: at });
-  if (typeof patch.pricing === "string")
-    rows.push({ key: "pricing", value: patch.pricing.slice(0, 20000), updated_at: at });
   if (rows.length) {
     const { error } = await sb.from("auto_settings").upsert(rows);
     if (error) return { ok: false, error: error.message };
@@ -958,71 +946,4 @@ export async function autoAdminImportCore(
     else imported++;
   }
   return { ok: true, imported, skipped };
-}
-
-
-// ---------------------------------------------------------------------------------------------------------------
-// NGÂN HÀNG ĐÁP ÁN HỎI ĐÁP DÙNG CHUNG: app của mọi người dùng đẩy câu đã học lên và tải về toàn bộ.
-// Lưu trong auto_settings (key "quiz_bank", value = object { "câu hỏi (đã chuẩn hoá)": "đáp án đúng (đã chuẩn hoá)" }).
-// Không cần bảng mới. Chỉ thành viên đang đăng nhập hoặc admin mới gọi được.
-// ---------------------------------------------------------------------------------------------------------------
-const QUIZ_MAX_ENTRIES = 20000;
-
-async function requireMemberOrAdmin(accessToken: string): Promise<{ ok: true } | Fail> {
-  const m = await requireMember(accessToken);
-  if (m.ok) return { ok: true };
-  return requireCallerIsAdmin(accessToken);
-}
-
-async function readQuizBank(): Promise<Record<string, string>> {
-  const sb = await db();
-  const { data } = await sb.from("auto_settings").select("value").eq("key", "quiz_bank").maybeSingle();
-  const v = (data as { value?: unknown } | null)?.value;
-  if (v && typeof v === "object" && !Array.isArray(v)) {
-    const out: Record<string, string> = {};
-    for (const [k, a] of Object.entries(v as Record<string, unknown>)) if (typeof a === "string") out[k] = a;
-    return out;
-  }
-  return {};
-}
-
-export async function autoQuizGetCore(
-  accessToken: string,
-): Promise<Ok<{ bank: Record<string, string>; count: number }> | Fail> {
-  const who = await requireMemberOrAdmin(accessToken);
-  if (!who.ok) return who;
-  const bank = await readQuizBank();
-  return { ok: true, bank, count: Object.keys(bank).length };
-}
-
-export async function autoQuizSubmitCore(
-  accessToken: string,
-  entries: unknown,
-): Promise<Ok<{ added: number; count: number }> | Fail> {
-  const who = await requireMemberOrAdmin(accessToken);
-  if (!who.ok) return who;
-  if (!entries || typeof entries !== "object" || Array.isArray(entries))
-    return { ok: false, error: "Dữ liệu không hợp lệ." };
-  const bank = await readQuizBank();
-  let added = 0;
-  let n = 0;
-  for (const [q, a] of Object.entries(entries as Record<string, unknown>)) {
-    if (++n > 300) break; // mỗi lần gửi tối đa 300 câu
-    if (typeof a !== "string") continue;
-    const kq = q.trim().slice(0, 300);
-    const ka = a.trim().slice(0, 200);
-    if (kq.length < 4 || !ka) continue;
-    if (bank[kq] === ka) continue;
-    if (!(kq in bank) && Object.keys(bank).length >= QUIZ_MAX_ENTRIES) continue;
-    bank[kq] = ka; // đáp án do game xác nhận sau khi trả lời -> bản mới nhất là bản đúng
-    added++;
-  }
-  if (added) {
-    const sb = await db();
-    const { error } = await sb
-      .from("auto_settings")
-      .upsert([{ key: "quiz_bank", value: bank, updated_at: new Date().toISOString() }]);
-    if (error) return { ok: false, error: error.message };
-  }
-  return { ok: true, added, count: Object.keys(bank).length };
 }

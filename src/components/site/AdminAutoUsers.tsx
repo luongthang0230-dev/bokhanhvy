@@ -21,7 +21,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   AUTO_FEATURES,
   AUTO_EXTRAS,
-  AUTO_TIERS,
+  autoTierOf,
   autoAdminList,
   autoAdminCreate,
   autoAdminUpdate,
@@ -49,26 +49,6 @@ const EXPIRY_CHOICES: [string, number][] = [
   ["90 ngày", 90],
   ["Vĩnh viễn", 0],
 ];
-/** Gói của 1 thành viên (từ mã tier_* trong deny) -> nhãn "Đại gia - VIP"... hoặc null. */
-function tierLabel(deny: string[]): string | null {
-  const t = [...AUTO_TIERS].reverse().find((x) => deny.includes(x.token));
-  const vip = deny.includes("grant_autosell");
-  if (!t) return vip ? "VIP" : null;
-  return vip ? `${t.label} - VIP` : t.label;
-}
-const TIER_CLASS: Record<string, string> = {
-  nongdan: "bg-amber-800 text-amber-50",
-  nhagiau: "bg-violet-700 text-white",
-  daigia: "bg-yellow-400 text-yellow-950",
-};
-/** Áp gói: đặt số acc + danh sách tính năng khoá theo gói, giữ nguyên các quyền cộng thêm (grant_*). */
-function applyTier(key: string, deny: string[]): { maxAccs: number | null; deny: string[] } {
-  const t = AUTO_TIERS.find((x) => x.key === key);
-  const extras = deny.filter((x) => x.startsWith("grant_"));
-  if (!t) return { maxAccs: null, deny: extras };
-  return { maxAccs: t.maxAccs, deny: [...t.deny, ...extras, t.token] };
-}
-
 const ACC_CHOICES: [string, number][] = [
   ["2 acc", 2],
   ["3 acc", 3],
@@ -351,20 +331,17 @@ export function AdminAutoUsers() {
                 <div className="min-w-0 flex-1">
                   <p className="flex flex-wrap items-center gap-2 font-semibold">
                     {u.username}
-                    {tierLabel(u.deny) && (
-                      <span
-                        className={cn(
-                          "rounded-full px-2 py-0.5 text-xs font-bold",
-                          TIER_CLASS[AUTO_TIERS.find((t) => u.deny.includes(t.token))?.key ?? ""] ??
-                            "bg-muted text-foreground",
-                        )}
-                      >
-                        {tierLabel(u.deny)}
-                      </span>
-                    )}
                     <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", badge.cls)}>
                       {badge.label}
                     </span>
+                    {autoTierOf(u.deny) && (
+                      <span
+                        className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-700"
+                        title="Gói do Admin gán trong app (mã tier_* trong danh sách quyền)"
+                      >
+                        Gói {autoTierOf(u.deny)?.label}
+                      </span>
+                    )}
                     {u.session?.live && (
                       <span
                         className="rounded-full bg-sky-500/15 px-2 py-0.5 text-xs font-medium text-sky-600"
@@ -394,8 +371,11 @@ export function AdminAutoUsers() {
                       ({rem.text})
                     </span>{" "}
                     · Đăng nhập gần nhất {formatDate(u.lastLoginAt)}
-                    {u.deny.filter((x) => !x.startsWith("grant_")).length > 0 && (
-                      <> · Khoá {u.deny.filter((x) => !x.startsWith("grant_")).length} tính năng</>
+                    {u.deny.filter((x) => !x.startsWith("grant_") && !x.startsWith("tier_")).length > 0 && (
+                      <>
+                        {" "}
+                        · Khoá {u.deny.filter((x) => !x.startsWith("grant_") && !x.startsWith("tier_")).length} tính năng
+                      </>
                     )}
                     {u.deny.includes("grant_autosell") && <> · VIP tự bán</>}
                   </p>
@@ -586,25 +566,6 @@ function EditDialog({
               <Select value={maxAccs} onChange={setMaxAccs} options={ACC_CHOICES} />
             </div>
           </div>
-          <div>
-            <Label className="mb-1 block text-xs">Gói (name tag) — chọn gói sẽ tự đặt số acc + quyền theo gói</Label>
-            <select
-              className="h-10 w-full rounded-md border bg-background px-2 text-sm"
-              value={AUTO_TIERS.find((t) => deny.includes(t.token))?.key ?? ""}
-              onChange={(e) => {
-                const r = applyTier(e.target.value, deny);
-                setDeny(r.deny);
-                if (r.maxAccs !== null) setMaxAccs(r.maxAccs);
-              }}
-            >
-              <option value="">(Chưa phân gói)</option>
-              {AUTO_TIERS.map((t) => (
-                <option key={t.key} value={t.key}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-          </div>
           <div className="flex items-center gap-3">
             <Checkbox
               id="reset-exp"
@@ -620,6 +581,11 @@ function EditDialog({
           </div>
           <div>
             <p className="mb-2 text-sm font-medium">Quyền sử dụng tính năng (bỏ tick = khoá)</p>
+            {autoTierOf(deny) && (
+              <p className="mb-2 text-xs text-muted-foreground">
+                Gói hiện tại: <b>{autoTierOf(deny)?.label}</b> — gán / đổi gói trong app Admin (Quản lý thành viên → Cài đặt TK). Lưu ở đây vẫn giữ nguyên gói.
+              </p>
+            )}
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {AUTO_FEATURES.map((f) => (
                 <label key={f.key} className="flex items-center gap-2 text-sm">
@@ -682,13 +648,6 @@ function ExtendDialog({
     const res = await autoAdminUpdate({
       data: { access_token: token, input: { username: user.username, expiry: { days, extend } } },
     });
-    if (res.ok && tier) {
-      const r = applyTier(tier, []);
-      const up = await autoAdminUpdate({
-        data: { access_token: token, input: { username: username.trim().toLowerCase(), max_accs: r.maxAccs ?? maxAccs, deny: r.deny } },
-      });
-      if (!up.ok) toast.error(`Đã tạo nhưng chưa gán được gói: ${up.error}`);
-    }
     setBusy(false);
     if (!res.ok) {
       toast.error(res.error);
@@ -798,7 +757,6 @@ function CreateDialog({
   const [password, setPassword] = useState("");
   const [days, setDays] = useState(30);
   const [maxAccs, setMaxAccs] = useState(2);
-  const [tier, setTier] = useState("nongdan");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (open) {
@@ -806,7 +764,6 @@ function CreateDialog({
       setPassword("");
       setDays(30);
       setMaxAccs(2);
-      setTier("nongdan");
     }
   }, [open]);
 
@@ -850,22 +807,6 @@ function CreateDialog({
             <Select value={days} onChange={setDays} options={EXPIRY_CHOICES} />
             <Select value={maxAccs} onChange={setMaxAccs} options={ACC_CHOICES} />
           </div>
-          <select
-            className="h-10 w-full rounded-md border bg-background px-2 text-sm"
-            value={tier}
-            onChange={(e) => {
-              setTier(e.target.value);
-              const r = applyTier(e.target.value, []);
-              if (r.maxAccs !== null) setMaxAccs(r.maxAccs);
-            }}
-          >
-            <option value="">(Chưa phân gói)</option>
-            {AUTO_TIERS.map((t) => (
-              <option key={t.key} value={t.key}>
-                Gói {t.label}
-              </option>
-            ))}
-          </select>
           <Button type="submit" className="w-full" disabled={busy}>
             {busy ? "Đang tạo..." : "Thêm"}
           </Button>
