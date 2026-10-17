@@ -15,6 +15,8 @@
 //   /api/auto/session/acquire { device, host, ver }      -> { ok } | { ok:false, code:"busy", error }
 //   /api/auto/session/check   { device, host, ver }      -> { ok, state: "ok" | "kicked" }
 //   /api/auto/session/release { device }                 -> { ok }
+//   /api/auto/quiz/get        {}                         -> { ok, bank: { câu: đáp án }, count }   (ngân hàng đáp án hỏi đáp dùng chung; admin cũng gọi được)
+//   /api/auto/quiz/submit     { entries: { câu: đáp án } } -> { ok, added, count }
 //
 // Admin (Bearer = access_token của tài khoản admin web; lấy bằng /api/auto/admin/login)
 //   /api/auto/admin/login     { email, password }
@@ -37,6 +39,8 @@ import {
   autoSessionAcquireCore,
   autoSessionCheckCore,
   autoSessionReleaseCore,
+  autoQuizGetCore,
+  autoQuizSubmitCore,
   autoAdminLoginCore,
   autoAdminListCore,
   autoAdminCreateCore,
@@ -142,6 +146,10 @@ export async function handleAutoApiRequest(request: Request): Promise<Response |
         return respond(await autoSessionCheckCore(token, deviceOf(body)));
       case "session/release":
         return respond(await autoSessionReleaseCore(token, deviceOf(body)));
+      case "quiz/get":
+        return respond(await autoQuizGetCore(token));
+      case "quiz/submit":
+        return respond(await autoQuizSubmitCore(token, body["entries"]));
 
       case "admin/login":
         return respond(await autoAdminLoginCore(str(body["email"]), str(body["password"])));
