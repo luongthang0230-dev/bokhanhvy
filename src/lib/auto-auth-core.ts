@@ -189,11 +189,16 @@ function expiresSec(m: MemberDb): number | null {
 }
 
 function profileOf(m: MemberDb): AutoProfile {
+  // Tài khoản DÙNG THỬ được dùng mọi tính năng của gói Đại gia (không giới hạn acc). Hết hạn dùng thử thì bị khoá như cũ;
+  // admin chuyển sang "active" thì hết đặc quyền này và theo gói admin gán.
+  const trial = m.status === "trial";
   return {
     status: m.status,
     expires: expiresSec(m),
-    max_accs: Number.isFinite(m.max_accs) ? m.max_accs : 2,
-    deny: cleanDeny(m.deny ?? []),
+    max_accs: trial ? 0 : Number.isFinite(m.max_accs) ? m.max_accs : 2,
+    deny: cleanDeny(
+      trial ? [...(m.deny ?? []).filter((x) => x.startsWith("grant_")), "tier_daigia"] : (m.deny ?? []),
+    ),
   };
 }
 
@@ -318,6 +323,7 @@ export async function autoRegisterCore(
   password: string,
   fp: string,
   ip: string,
+  fpsRaw?: unknown,
 ): Promise<Ok<{ message: string }> | Fail> {
   const settings = await getSettingsCore();
   if (!settings.registration_open) {
@@ -341,12 +347,17 @@ export async function autoRegisterCore(
   if (await findMember(username)) return { ok: false, error: "Tên đăng nhập này đã tồn tại." };
 
   const lien = settings.contact ? `\nLiên hệ Admin để được kích hoạt: ${settings.contact}` : "";
-  const { data: usedFp } = await sb
-    .from("auto_trials")
-    .select("fp")
-    .eq("fp", fp.toLowerCase())
-    .maybeSingle();
-  if (usedFp) return { ok: false, error: "Máy này đã dùng thử rồi." + lien };
+  // Nhiều mã nhận dạng máy độc lập (MachineGuid / ổ đĩa / card mạng...): trùng BẤT KỲ mã nào = máy này đã dùng thử -> không đăng ký lại được
+  // dù xoá app, cài lại, đổi tên máy hay đổi tài khoản Windows.
+  const fpList = [
+    ...new Set(
+      [fp, ...(Array.isArray(fpsRaw) ? fpsRaw : [])]
+        .filter((x): x is string => typeof x === "string" && /^[a-f0-9]{16,64}$/i.test(x))
+        .map((x) => x.toLowerCase()),
+    ),
+  ].slice(0, 12);
+  const { data: usedRows } = await sb.from("auto_trials").select("fp").in("fp", fpList).limit(1);
+  if (usedRows && usedRows.length) return { ok: false, error: "Máy này đã dùng thử rồi." + lien };
 
   if (ip) {
     const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
@@ -380,7 +391,10 @@ export async function autoRegisterCore(
       return { ok: false, error: "Tên đăng nhập này đã tồn tại." };
     return { ok: false, error: insErr.message || "Không tạo được tài khoản." };
   }
-  await sb.from("auto_trials").upsert({ fp: fp.toLowerCase(), username, ip: ip || null });
+  await sb
+    .from("auto_trials")
+    // chỉ dòng đầu mang IP: giới hạn đăng ký theo IP vẫn đếm đúng 1 lượt
+    .upsert(fpList.map((f, i) => ({ fp: f, username, ip: i === 0 ? ip || null : null })));
   return { ok: true, message: `Đăng ký thành công! Bạn được dùng thử ${AUTO_TRIAL_DAYS} ngày.` };
 }
 

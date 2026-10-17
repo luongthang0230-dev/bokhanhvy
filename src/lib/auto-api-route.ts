@@ -131,6 +131,7 @@ export async function handleAutoApiRequest(request: Request): Promise<Response |
             str(body["password"]),
             str(body["fp"]),
             clientIp(request),
+            body["fps"],
           ),
         );
       case "login":
