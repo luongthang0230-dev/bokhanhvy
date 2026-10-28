@@ -113,7 +113,7 @@ export interface AutoMemberRow {
   lastLoginAt: string | null;
   /** false = thành viên cũ nhập từ app, chưa đăng nhập lần nào kể từ khi chuyển lên web. */
   migrated: boolean;
-  /** Phiên của từng nền tảng (tối đa 1 "pc" + 1 "android"). */
+  /** Phiên từng nền tảng (tối đa 1 "pc" + 1 "android"). */
   sessions: AutoSessionInfo[];
   /** Phiên có nhịp mới nhất (giữ cho tương thích). */
   session: AutoSessionInfo | null;
@@ -535,7 +535,7 @@ interface DeviceInfo {
   device: string;
   host: string;
   ver: string;
-  /** "pc" | "android". Thiếu / lạ => "pc" (app PC cũ và app Android cũ không gửi trường này). */
+  /** "pc" | "android". Thiếu / lạ => "pc". */
   platform?: string;
 }
 

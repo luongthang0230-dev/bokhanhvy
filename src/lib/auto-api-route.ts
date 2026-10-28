@@ -12,7 +12,7 @@
 //
 // Thành viên (Header "Authorization: Bearer <access_token>")
 //   /api/auto/me              {}                         -> { ok, role, message, profile, server_time, contact }
-//   /api/auto/session/acquire { device, host, ver, platform? } -> { ok } | { ok:false, code:"busy", error }
+//   /api/auto/session/acquire { device, host, ver }      -> { ok } | { ok:false, code:"busy", error }
 //   /api/auto/session/check   { device, host, ver }      -> { ok, state: "ok" | "kicked" }
 //   /api/auto/session/release { device }                 -> { ok }
 //   /api/auto/quiz/get        {}                         -> { ok, bank: { câu: đáp án }, count }   (ngân hàng đáp án hỏi đáp dùng chung; admin cũng gọi được)
