@@ -966,3 +966,70 @@ export async function autoAdminImportCore(
   }
   return { ok: true, imported, skipped };
 }
+
+
+// ---------------------------------------------------------------------------------------------------------------
+// NGÂN HÀNG ĐÁP ÁN HỎI ĐÁP DÙNG CHUNG: app của mọi người dùng đẩy câu đã học lên và tải về toàn bộ.
+// Lưu trong auto_settings (key "quiz_bank", value = object { "câu hỏi (đã chuẩn hoá)": "đáp án đúng (đã chuẩn hoá)" }).
+// Không cần bảng mới. Chỉ thành viên đang đăng nhập hoặc admin mới gọi được.
+// ---------------------------------------------------------------------------------------------------------------
+const QUIZ_MAX_ENTRIES = 20000;
+
+async function requireMemberOrAdmin(accessToken: string): Promise<{ ok: true } | Fail> {
+  const m = await requireMember(accessToken);
+  if (m.ok) return { ok: true };
+  return requireCallerIsAdmin(accessToken);
+}
+
+async function readQuizBank(): Promise<Record<string, string>> {
+  const sb = await db();
+  const { data } = await sb.from("auto_settings").select("value").eq("key", "quiz_bank").maybeSingle();
+  const v = (data as { value?: unknown } | null)?.value;
+  if (v && typeof v === "object" && !Array.isArray(v)) {
+    const out: Record<string, string> = {};
+    for (const [k, a] of Object.entries(v as Record<string, unknown>)) if (typeof a === "string") out[k] = a;
+    return out;
+  }
+  return {};
+}
+
+export async function autoQuizGetCore(
+  accessToken: string,
+): Promise<Ok<{ bank: Record<string, string>; count: number }> | Fail> {
+  const who = await requireMemberOrAdmin(accessToken);
+  if (!who.ok) return who;
+  const bank = await readQuizBank();
+  return { ok: true, bank, count: Object.keys(bank).length };
+}
+
+export async function autoQuizSubmitCore(
+  accessToken: string,
+  entries: unknown,
+): Promise<Ok<{ added: number; count: number }> | Fail> {
+  const who = await requireMemberOrAdmin(accessToken);
+  if (!who.ok) return who;
+  if (!entries || typeof entries !== "object" || Array.isArray(entries))
+    return { ok: false, error: "Dữ liệu không hợp lệ." };
+  const bank = await readQuizBank();
+  let added = 0;
+  let n = 0;
+  for (const [q, a] of Object.entries(entries as Record<string, unknown>)) {
+    if (++n > 300) break; // mỗi lần gửi tối đa 300 câu
+    if (typeof a !== "string") continue;
+    const kq = q.trim().slice(0, 300);
+    const ka = a.trim().slice(0, 200);
+    if (kq.length < 4 || !ka) continue;
+    if (bank[kq] === ka) continue;
+    if (!(kq in bank) && Object.keys(bank).length >= QUIZ_MAX_ENTRIES) continue;
+    bank[kq] = ka; // đáp án do game xác nhận sau khi trả lời -> bản mới nhất là bản đúng
+    added++;
+  }
+  if (added) {
+    const sb = await db();
+    const { error } = await sb
+      .from("auto_settings")
+      .upsert([{ key: "quiz_bank", value: bank, updated_at: new Date().toISOString() }]);
+    if (error) return { ok: false, error: error.message };
+  }
+  return { ok: true, added, count: Object.keys(bank).length };
+}
