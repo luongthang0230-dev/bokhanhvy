@@ -113,13 +113,19 @@ export interface AutoMemberRow {
   lastLoginAt: string | null;
   /** false = thành viên cũ nhập từ app, chưa đăng nhập lần nào kể từ khi chuyển lên web. */
   migrated: boolean;
-  session: {
-    device: string;
-    host: string | null;
-    ver: string | null;
-    hb: string;
-    live: boolean;
-  } | null;
+  /** Phiên của từng nền tảng (tối đa 1 "pc" + 1 "android"). */
+  sessions: AutoSessionInfo[];
+  /** Phiên có nhịp mới nhất (giữ cho tương thích). */
+  session: AutoSessionInfo | null;
+}
+
+export interface AutoSessionInfo {
+  platform: "pc" | "android";
+  device: string;
+  host: string | null;
+  ver: string | null;
+  hb: string;
+  live: boolean;
 }
 
 export interface AutoSettings {
@@ -529,11 +535,18 @@ interface DeviceInfo {
   device: string;
   host: string;
   ver: string;
+  /** "pc" | "android". Thiếu / lạ => "pc" (app PC cũ và app Android cũ không gửi trường này). */
+  platform?: string;
 }
 
 function cleanDevice(d: DeviceInfo): DeviceInfo | null {
   if (!/^[A-Za-z0-9_-]{8,64}$/.test(d.device)) return null;
-  return { device: d.device, host: (d.host || "").slice(0, 40), ver: (d.ver || "").slice(0, 20) };
+  return {
+    device: d.device,
+    host: (d.host || "").slice(0, 40),
+    ver: (d.ver || "").slice(0, 20),
+    platform: d.platform === "android" ? "android" : "pc",
+  };
 }
 
 export async function autoSessionAcquireCore(
@@ -555,6 +568,7 @@ export async function autoSessionAcquireCore(
     p_host: dev.host,
     p_ver: dev.ver,
     p_ttl: AUTO_SESSION_TTL_S,
+    p_platform: dev.platform,
   });
   if (error) return { ok: false, error: error.message || "Không ghi được phiên đăng nhập." };
   if (data === "busy") {
@@ -583,6 +597,7 @@ export async function autoSessionCheckCore(
     p_host: dev.host,
     p_ver: dev.ver,
     p_hb_every: AUTO_HB_EVERY_S,
+    p_platform: dev.platform,
   });
   if (error) return { ok: false, error: error.message || "Không kiểm tra được phiên đăng nhập." };
   return { ok: true, state: data === "kicked" ? "kicked" : "ok", server_time: nowS() };
@@ -601,6 +616,7 @@ export async function autoSessionReleaseCore(
     .from("auto_sessions")
     .update({ released: true, hb: new Date(0).toISOString() })
     .eq("member_id", who.member.id)
+    .eq("platform", dev.platform ?? "pc")
     .eq("device", dev.device);
   return { ok: true };
 }
@@ -649,13 +665,32 @@ export async function autoAdminLoginCore(
   };
 }
 
-function toRow(
-  m: MemberDb,
-  s:
-    | { device: string; host: string | null; ver: string | null; hb: string; released: boolean }
-    | undefined,
-): AutoMemberRow {
-  const hbMs = s ? Date.parse(s.hb) : 0;
+type SessDb = {
+  member_id: string;
+  platform: string;
+  device: string;
+  host: string | null;
+  ver: string | null;
+  hb: string;
+  released: boolean;
+};
+
+function toSessionInfo(s: SessDb): AutoSessionInfo {
+  return {
+    platform: s.platform === "android" ? "android" : "pc",
+    device: s.device,
+    host: s.host,
+    ver: s.ver,
+    hb: s.hb,
+    live: !s.released && Date.now() - Date.parse(s.hb) < AUTO_SESSION_TTL_S * 1000,
+  };
+}
+
+function toRow(m: MemberDb, ss: SessDb[]): AutoMemberRow {
+  const sessions = ss
+    .map(toSessionInfo)
+    .sort((x, y) => (x.platform === y.platform ? 0 : x.platform === "pc" ? -1 : 1));
+  const latest = [...sessions].sort((x, y) => Date.parse(y.hb) - Date.parse(x.hb))[0] ?? null;
   return {
     id: m.id,
     username: m.username,
@@ -666,15 +701,8 @@ function toRow(
     createdAt: m.created_at,
     lastLoginAt: m.last_login_at,
     migrated: !!m.user_id,
-    session: s
-      ? {
-          device: s.device,
-          host: s.host,
-          ver: s.ver,
-          hb: s.hb,
-          live: !s.released && Date.now() - hbMs < AUTO_SESSION_TTL_S * 1000,
-        }
-      : null,
+    sessions,
+    session: latest,
   };
 }
 
@@ -689,22 +717,13 @@ export async function autoAdminListCore(
     sb.from("auto_sessions").select("*"),
   ]);
   if (error) return { ok: false, error: error.message };
-  const sessMap = new Map<
-    string,
-    { device: string; host: string | null; ver: string | null; hb: string; released: boolean }
-  >(
-    (ss ?? []).map(
-      (s: {
-        member_id: string;
-        device: string;
-        host: string | null;
-        ver: string | null;
-        hb: string;
-        released: boolean;
-      }) => [s.member_id, s],
-    ),
-  );
-  const members = ((ms ?? []) as MemberDb[]).map((m) => toRow(m, sessMap.get(m.id)));
+  const byMember = new Map<string, SessDb[]>();
+  for (const s of (ss ?? []) as SessDb[]) {
+    const arr = byMember.get(s.member_id) ?? [];
+    arr.push(s);
+    byMember.set(s.member_id, arr);
+  }
+  const members = ((ms ?? []) as MemberDb[]).map((m) => toRow(m, byMember.get(m.id) ?? []));
   return { ok: true, members, settings: await getSettingsCore(), server_time: nowS() };
 }
 

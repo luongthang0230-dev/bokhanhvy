@@ -342,14 +342,21 @@ export function AdminAutoUsers() {
                         Gói {autoTierOf(u.deny)?.label}
                       </span>
                     )}
-                    {u.session?.live && (
+                    {u.sessions.map((ss) => (
                       <span
-                        className="rounded-full bg-sky-500/15 px-2 py-0.5 text-xs font-medium text-sky-600"
-                        title={`Thiết bị: ${u.session.host ?? "?"} · app v${u.session.ver ?? "?"}`}
+                        key={ss.platform}
+                        className={
+                          ss.live
+                            ? "rounded-full bg-sky-500/15 px-2 py-0.5 text-xs font-medium text-sky-600"
+                            : "rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+                        }
+                        title={`${ss.platform === "android" ? "Android" : "PC/VPS"} · ${ss.host ?? "?"} · app v${ss.ver ?? "?"} · nhịp cuối ${new Date(ss.hb).toLocaleString("vi-VN")}`}
                       >
-                        Đang online{u.session.host ? ` · ${u.session.host}` : ""}
+                        {ss.platform === "android" ? "Android" : "PC"}{" "}
+                        {ss.live ? "online" : "offline"}
+                        {ss.host ? ` · ${ss.host}` : ""}
                       </span>
-                    )}
+                    ))}
                     {!u.migrated && (
                       <span
                         className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
@@ -404,7 +411,7 @@ export function AdminAutoUsers() {
                 >
                   <KeyRound className="mr-1 h-3.5 w-3.5" /> Đổi MK
                 </Button>
-                {u.session && (
+                {u.sessions.length > 0 && (
                   <Button
                     variant="outline"
                     size="sm"
