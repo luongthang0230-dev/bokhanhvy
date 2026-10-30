@@ -55,11 +55,17 @@ export const autoAdminSetSettings = createServerFn({ method: "POST" })
       access_token: string;
       registration_open?: boolean | undefined;
       contact?: string | undefined;
+      pricing?: string | undefined;
+      update_url?: string | undefined;
+      pay_qr?: string | undefined;
     }) => d,
   )
   .handler(async ({ data }) =>
     autoAdminSetSettingsCore(data.access_token, {
       registration_open: data.registration_open,
       contact: data.contact,
+      pricing: data.pricing,
+      update_url: data.update_url,
+      pay_qr: data.pay_qr,
     }),
   );

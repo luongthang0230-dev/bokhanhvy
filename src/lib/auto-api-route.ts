@@ -4,14 +4,14 @@
 //
 // ============================================================================
 // Công khai (không cần đăng nhập)
-//   /api/auto/status          {}                         -> { ok, registration_open, contact, server_time }
+//   /api/auto/status          {}                         -> { ok, registration_open, contact, pricing, update_url, server_time }
 //   /api/auto/register        { username, password, fp } -> { ok, message } | { ok:false, error }
 //   /api/auto/login           { username, password }     -> { ok, role, message, access_token?, refresh_token?, profile?, ... }
 //        role = "member" (được dùng, có token) | "disabled" | "pending" | "trial_expired" | "expired" (bị chặn, không token)
 //   /api/auto/refresh         { refresh_token }          -> { ok, access_token, refresh_token }   (thành viên lẫn admin)
 //
 // Thành viên (Header "Authorization: Bearer <access_token>")
-//   /api/auto/me              {}                         -> { ok, role, message, profile, server_time, contact }
+//   /api/auto/me              {}                         -> { ok, role, message, profile, server_time, contact, pricing, update_url }
 //   /api/auto/session/acquire { device, host, ver }      -> { ok } | { ok:false, code:"busy", error }
 //   /api/auto/session/check   { device, host, ver }      -> { ok, state: "ok" | "kicked" }
 //   /api/auto/session/release { device }                 -> { ok }
@@ -26,7 +26,7 @@
 //   /api/auto/admin/password  { username, password }
 //   /api/auto/admin/delete    { username }
 //   /api/auto/admin/kick      { username }
-//   /api/auto/admin/settings  { registration_open?, contact? }
+//   /api/auto/admin/settings  { registration_open?, contact?, pricing?, update_url?, pay_qr? }   (pricing / pay_qr là chuỗi lưu nguyên văn)
 //   /api/auto/admin/import    { records: [...] }        (nhập users.json cũ của app, chạy 1 lần)
 // ============================================================================
 
@@ -201,6 +201,9 @@ export async function handleAutoApiRequest(request: Request): Promise<Response |
                 : undefined,
             contact: typeof body["contact"] === "string" ? (body["contact"] as string) : undefined,
             pricing: typeof body["pricing"] === "string" ? (body["pricing"] as string) : undefined,
+            update_url:
+              typeof body["update_url"] === "string" ? (body["update_url"] as string) : undefined,
+            pay_qr: typeof body["pay_qr"] === "string" ? (body["pay_qr"] as string) : undefined,
           }),
         );
       case "admin/import":

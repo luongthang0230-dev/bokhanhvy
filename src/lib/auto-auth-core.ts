@@ -133,7 +133,18 @@ export interface AutoSessionInfo {
 export interface AutoSettings {
   registration_open: boolean;
   contact: string;
+  /** Bảng giá do admin soạn trong app (chuỗi JSON). Lưu NGUYÊN VĂN, app tự đọc. Rỗng = app dùng ảnh bảng giá mặc định. */
+  pricing: string;
+  /** Đường dẫn cập nhật app do admin điền. Rỗng = mặc định của app. */
+  update_url: string;
+  /** Ảnh QR thanh toán (base64). Chỉ trả trong login + admin settings (ảnh nặng, không đưa vào me / status). Rỗng = ảnh mặc định. */
+  pay_qr: string;
 }
+
+// Giới hạn kích thước cài đặt do admin lưu (quá giới hạn thì BÁO LỖI, không cắt ngầm: app so sánh từng ký tự để biết đã lưu đúng chưa).
+const AUTO_PRICING_MAX = 200000;
+const AUTO_UPDATE_URL_MAX = 500;
+const AUTO_PAY_QR_MAX = 1500000;
 
 type Fail = { ok: false; error: string; code?: "auth" | "busy" };
 type Ok<T> = { ok: true } & T;
@@ -147,6 +158,9 @@ export type AutoLoginResult =
       profile?: AutoProfile;
       server_time: number;
       contact: string;
+      pricing: string;
+      update_url: string;
+      pay_qr: string;
     }>
   | Fail;
 
@@ -225,6 +239,9 @@ async function getSettingsCore(): Promise<AutoSettings> {
   return {
     registration_open: map.get("registration_open") === true, // mặc định ĐÓNG (giống app cũ)
     contact: typeof map.get("contact") === "string" ? (map.get("contact") as string) : "",
+    pricing: typeof map.get("pricing") === "string" ? (map.get("pricing") as string) : "",
+    update_url: typeof map.get("update_url") === "string" ? (map.get("update_url") as string) : "",
+    pay_qr: typeof map.get("pay_qr") === "string" ? (map.get("pay_qr") as string) : "",
   };
 }
 
@@ -319,13 +336,21 @@ async function verifyLegacy(m: MemberDb, password: string): Promise<boolean> {
 // Công khai: trạng thái đăng ký / đăng ký / đăng nhập / làm mới
 // ---------------------------------------------------------------------------------------------------------------
 export async function autoPublicStatusCore(): Promise<
-  Ok<{ registration_open: boolean; contact: string; server_time: number }>
+  Ok<{
+    registration_open: boolean;
+    contact: string;
+    pricing: string;
+    update_url: string;
+    server_time: number;
+  }>
 > {
   const s = await getSettingsCore();
   return {
     ok: true,
     registration_open: s.registration_open,
     contact: s.contact,
+    pricing: s.pricing,
+    update_url: s.update_url,
     server_time: nowS(),
   };
 }
@@ -453,6 +478,9 @@ export async function autoLoginCore(
       message: ev.message,
       server_time: nowS(),
       contact: settings.contact,
+      pricing: settings.pricing,
+      update_url: settings.update_url,
+      pay_qr: settings.pay_qr,
     };
   }
   await sb.from("auto_members").update({ last_login_at: new Date().toISOString() }).eq("id", m.id);
@@ -465,6 +493,9 @@ export async function autoLoginCore(
     profile: profileOf(m),
     server_time: nowS(),
     contact: settings.contact,
+    pricing: settings.pricing,
+    update_url: settings.update_url,
+    pay_qr: settings.pay_qr,
   };
 }
 
@@ -516,6 +547,8 @@ export async function autoMeCore(
       profile: AutoProfile;
       server_time: number;
       contact: string;
+      pricing: string;
+      update_url: string;
     }>
   | Fail
 > {
@@ -530,6 +563,8 @@ export async function autoMeCore(
     profile: profileOf(who.member),
     server_time: nowS(),
     contact: settings.contact,
+    pricing: settings.pricing,
+    update_url: settings.update_url,
   };
 }
 
@@ -896,7 +931,13 @@ export async function autoAdminKickCore(
 
 export async function autoAdminSetSettingsCore(
   accessToken: string,
-  patch: { registration_open?: boolean | undefined; contact?: string | undefined },
+  patch: {
+    registration_open?: boolean | undefined;
+    contact?: string | undefined;
+    pricing?: string | undefined;
+    update_url?: string | undefined;
+    pay_qr?: string | undefined;
+  },
 ): Promise<Ok<{ settings: AutoSettings }> | Fail> {
   const check = await requireCallerIsAdmin(accessToken);
   if (!check.ok) return check;
@@ -907,6 +948,23 @@ export async function autoAdminSetSettingsCore(
     rows.push({ key: "registration_open", value: patch.registration_open, updated_at: at });
   if (typeof patch.contact === "string")
     rows.push({ key: "contact", value: patch.contact.trim().slice(0, 200), updated_at: at });
+  // Bảng giá (chuỗi JSON do app soạn): lưu NGUYÊN VĂN - không trim / parse / cắt. Chuỗi rỗng = xoá (app quay về ảnh mặc định).
+  if (typeof patch.pricing === "string") {
+    if (patch.pricing.length > AUTO_PRICING_MAX)
+      return { ok: false, error: `Bảng giá quá dài (${patch.pricing.length} / tối đa ${AUTO_PRICING_MAX} ký tự).` };
+    rows.push({ key: "pricing", value: patch.pricing, updated_at: at });
+  }
+  if (typeof patch.update_url === "string") {
+    const u = patch.update_url.trim();
+    if (u.length > AUTO_UPDATE_URL_MAX)
+      return { ok: false, error: `Đường dẫn cập nhật quá dài (tối đa ${AUTO_UPDATE_URL_MAX} ký tự).` };
+    rows.push({ key: "update_url", value: u, updated_at: at });
+  }
+  if (typeof patch.pay_qr === "string") {
+    if (patch.pay_qr.length > AUTO_PAY_QR_MAX)
+      return { ok: false, error: "Ảnh QR quá lớn (tối đa khoảng 1 MB sau khi mã hoá base64)." };
+    rows.push({ key: "pay_qr", value: patch.pay_qr, updated_at: at });
+  }
   if (rows.length) {
     const { error } = await sb.from("auto_settings").upsert(rows);
     if (error) return { ok: false, error: error.message };
