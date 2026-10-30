@@ -36,7 +36,7 @@ export const AUTO_FEATURES = [
   { key: "hide", label: "Ẩn nhân vật / Ẩn auto (ẩn cửa sổ game, ẩn xuống khay)" },
 ] as const;
 /** Quyền "cộng thêm" (mặc định TẮT): có token trong mảng deny = được cấp. Khớp EXTRAS trong app/auth.py. */
-export const AUTO_EXTRAS = [{ key: "grant_autosell", label: "VIP: Tự bán nguyên liệu đã nhặt (tab Nhặt)" }] as const;
+export const AUTO_EXTRAS = [{ key: "grant_autosell", label: "VIP: Tự bán đồ + Né boss khi nhặt (tab Nhặt)" }] as const;
 const FEATURE_KEYS: string[] = [...AUTO_FEATURES.map((f) => f.key), ...AUTO_EXTRAS.map((f) => f.key)];
 
 /**
@@ -47,6 +47,8 @@ export const AUTO_TIERS = [
   { key: "nongdan", token: "tier_nongdan", label: "Nông dân" },
   { key: "nhagiau", token: "tier_nhagiau", label: "Nhà giàu" },
   { key: "daigia", token: "tier_daigia", label: "Đại gia" },
+  // Gói VIP (gói thứ 4): full tính năng, 30 ngày (admin đặt hạn), không giới hạn nhân vật. Phải là gói CUỐI (cao nhất) trong danh sách này.
+  { key: "vip", token: "tier_vip", label: "VIP" },
 ] as const;
 const TIER_TOKENS: string[] = AUTO_TIERS.map((t) => t.token);
 
