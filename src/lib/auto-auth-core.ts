@@ -15,6 +15,7 @@
 export const AUTO_EMAIL_DOMAIN = "auto.local";
 export const AUTO_USERNAME_RE = /^[A-Za-z0-9_.-]{3,32}$/;
 export const AUTO_TRIAL_DAYS = 3;
+export const AUTO_VIP_DAYS = 30; // gói VIP: hạn 30 ngày kể từ lúc gán gói (admin không đặt hạn thì máy chủ tự đặt)
 export const AUTO_MIN_PW = 6;
 export const AUTO_SESSION_TTL_S = 720; // phiên quá 12 phút không có nhịp "còn sống" = hết hạn, máy khác mới được vào
 export const AUTO_HB_EVERY_S = 60; // ghi nhịp tối đa mỗi 60 giây (app hỏi thường xuyên hơn nhưng không ghi dày)
@@ -360,6 +361,7 @@ export async function autoRegisterCore(
   password: string,
   fp: string,
   ip: string,
+  fpsRaw?: unknown,
 ): Promise<Ok<{ message: string }> | Fail> {
   const settings = await getSettingsCore();
   if (!settings.registration_open) {
@@ -383,12 +385,16 @@ export async function autoRegisterCore(
   if (await findMember(username)) return { ok: false, error: "Tên đăng nhập này đã tồn tại." };
 
   const lien = settings.contact ? `\nLiên hệ Admin để được kích hoạt: ${settings.contact}` : "";
-  const { data: usedFp } = await sb
-    .from("auto_trials")
-    .select("fp")
-    .eq("fp", fp.toLowerCase())
-    .maybeSingle();
-  if (usedFp) return { ok: false, error: "Máy này đã dùng thử rồi." + lien };
+  // fp chính + các mã phụ app gửi kèm (fps): trùng BẤT KỲ mã nào đã từng dùng thử là từ chối
+  const allFps = [
+    ...new Set(
+      [fp, ...(Array.isArray(fpsRaw) ? fpsRaw : [])]
+        .filter((x): x is string => typeof x === "string" && /^[a-f0-9]{16,64}$/i.test(x))
+        .map((x) => x.toLowerCase()),
+    ),
+  ].slice(0, 8);
+  const { data: usedFps } = await sb.from("auto_trials").select("fp").in("fp", allFps).limit(1);
+  if (usedFps && usedFps.length > 0) return { ok: false, error: "Máy này đã dùng thử rồi." + lien };
 
   if (ip) {
     const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
@@ -422,7 +428,7 @@ export async function autoRegisterCore(
       return { ok: false, error: "Tên đăng nhập này đã tồn tại." };
     return { ok: false, error: insErr.message || "Không tạo được tài khoản." };
   }
-  await sb.from("auto_trials").upsert({ fp: fp.toLowerCase(), username, ip: ip || null });
+  await sb.from("auto_trials").upsert(allFps.map((f) => ({ fp: f, username, ip: ip || null })));
   return { ok: true, message: `Đăng ký thành công! Bạn được dùng thử ${AUTO_TRIAL_DAYS} ngày.` };
 }
 
@@ -789,7 +795,9 @@ export async function autoAdminCreateCore(
   if ((input.password ?? "").length < AUTO_MIN_PW)
     return { ok: false, error: `Mật khẩu tối thiểu ${AUTO_MIN_PW} ký tự.` };
   const status = STATUSES.includes(input.status ?? "") ? (input.status as AutoStatus) : "active";
-  const days = Math.max(0, Math.floor(Number(input.days) || 0));
+  let days = Math.max(0, Math.floor(Number(input.days) || 0));
+  if (!days && status === "trial") days = AUTO_TRIAL_DAYS; // dùng thử LUÔN có hạn
+  if (!days && cleanDeny(input.deny).includes("tier_vip")) days = AUTO_VIP_DAYS; // VIP luôn có hạn 30 ngày
   const maxAccs = Math.max(0, Math.floor(Number(input.max_accs) || 0));
   if (await findMember(username)) return { ok: false, error: "Tên đăng nhập này đã tồn tại." };
 
@@ -843,8 +851,14 @@ export async function autoAdminUpdateCore(
     patch["max_accs"] = Math.max(0, Math.floor(Number(input.max_accs) || 0));
   if (input.deny !== undefined)
     patch["deny"] = cleanDeny(input.deny);
+  const finalStatus = (patch["status"] as AutoStatus | undefined) ?? m.status;
+  const hadVip = cleanDeny(m.deny).includes("tier_vip");
+  const newDeny = patch["deny"] as string[] | undefined;
+  const becomesVip = newDeny !== undefined && newDeny.includes("tier_vip") && !hadVip;
   if (input.expiry !== undefined) {
     const days = Math.max(0, Math.floor(Number(input.expiry.days) || 0));
+    if (!days && finalStatus === "trial")
+      return { ok: false, error: "Tài khoản dùng thử bắt buộc phải có hạn (không đặt 'vĩnh viễn')." };
     if (!days) {
       patch["expires_at"] = null;
       msg = "Đã đặt: không giới hạn thời gian.";
@@ -856,6 +870,17 @@ export async function autoAdminUpdateCore(
       patch["expires_at"] = next.toISOString();
       msg = `Hạn dùng mới: ${next.toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}.`;
     }
+  }
+  // Admin không đặt hạn mà vừa gán gói VIP -> máy chủ TỰ đặt hạn 30 ngày từ bây giờ
+  if (input.expiry === undefined && becomesVip) {
+    const next = new Date(Date.now() + AUTO_VIP_DAYS * 86400 * 1000);
+    patch["expires_at"] = next.toISOString();
+    msg = `Đã gán gói VIP, hạn ${AUTO_VIP_DAYS} ngày: ${next.toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}.`;
+  }
+  // Tài khoản dùng thử (đang hoặc vừa chuyển sang) mà chưa có hạn -> tự đặt AUTO_TRIAL_DAYS ngày, không để rơi vào "Hết dùng thử"
+  if (finalStatus === "trial" && patch["expires_at"] === undefined && !m.expires_at) {
+    patch["expires_at"] = new Date(Date.now() + AUTO_TRIAL_DAYS * 86400 * 1000).toISOString();
+    msg = `Dùng thử chưa có hạn: đã tự đặt ${AUTO_TRIAL_DAYS} ngày.`;
   }
   if (Object.keys(patch).length === 0) return { ok: true, message: msg };
   const sb = await db();
