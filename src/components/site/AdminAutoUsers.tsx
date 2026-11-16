@@ -385,6 +385,7 @@ export function AdminAutoUsers() {
                       </>
                     )}
                     {u.deny.includes("grant_autosell") && <> · VIP tự bán</>}
+                    {u.deny.includes("grant_boss") && <> · Tab Boss</>}
                   </p>
                 </div>
                 <Button
