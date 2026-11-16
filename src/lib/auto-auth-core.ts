@@ -37,7 +37,10 @@ export const AUTO_FEATURES = [
   { key: "hide", label: "Ẩn nhân vật / Ẩn auto (ẩn cửa sổ game, ẩn xuống khay)" },
 ] as const;
 /** Quyền "cộng thêm" (mặc định TẮT): có token trong mảng deny = được cấp. Khớp EXTRAS trong app/auth.py. */
-export const AUTO_EXTRAS = [{ key: "grant_autosell", label: "VIP: Tự bán đồ + Né boss khi nhặt (tab Nhặt)" }] as const;
+export const AUTO_EXTRAS = [
+  { key: "grant_autosell", label: "VIP: Tự bán đồ + Né boss khi nhặt (tab Nhặt)" },
+  { key: "grant_boss", label: "Hiện tab Boss (bảng boss + Săn Boss)" },
+] as const;
 const FEATURE_KEYS: string[] = [...AUTO_FEATURES.map((f) => f.key), ...AUTO_EXTRAS.map((f) => f.key)];
 
 /**
