@@ -6,15 +6,16 @@ import viteReact from "@vitejs/plugin-react";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import { nitro } from "nitro/vite";
 
-// Plain Vite config for deploying this TanStack Start app to Vercel.
-// Nitro's built-in "vercel" preset is zero-config: it emits a
-// `.vercel/output` folder (Build Output API) that Vercel picks up
-// automatically, so no `vercel.json` is required.
+// Deploys this TanStack Start app to Vercel (default) or Render.
+// - Vercel: no NITRO_PRESET set -> "vercel" preset -> `.vercel/output`.
+// - Render: set NITRO_PRESET=node-server -> `.output/server/index.mjs`.
 export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), "VITE_");
   const envDefine = Object.fromEntries(
     Object.entries(env).map(([key, value]) => [`import.meta.env.${key}`, JSON.stringify(value)]),
   );
+
+  const nitroPreset = process.env.NITRO_PRESET || "vercel";
 
   return {
     define: envDefine,
@@ -44,9 +45,8 @@ export default defineConfig(({ command, mode }) => {
           client: { files: ["**/server/**"], specifiers: ["server-only"] },
         },
       }),
-      // Only needed for the production build — the vercel preset writes
-      // a `.vercel/output` directory that Vercel deploys as-is.
-      ...(command === "build" ? [nitro({ preset: "vercel" })] : []),
+      // Only needed for the production build.
+      ...(command === "build" ? [nitro({ preset: nitroPreset })] : []),
       viteReact(),
     ],
   };
