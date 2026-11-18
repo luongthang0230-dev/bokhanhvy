@@ -57,7 +57,7 @@ export async function handleSpin(
       return { status: 200, body: data }; // data đã có ok:true
     }
 
-    const platform = String(body?.platform ?? "").toLowerCase();
+    const platform = String(body["platform"] ?? "").toLowerCase();
     const { data, error } = await sb.rpc("lucky_spin_draw", { p_user: user, p_platform: platform });
     if (error) return bad(500, "Lỗi máy chủ: " + error.message);
     return { status: 200, body: data }; // ok:false (đã quay / chưa tới kỳ...) vẫn trả 200 + message tiếng Việt
@@ -77,33 +77,33 @@ export async function handleSpin(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const p: any = {};
       if (body && typeof body === "object") {
-        if ("enabled" in body) p.enabled = !!body.enabled;
+        if ("enabled" in body) p.enabled = !!body["enabled"];
         if ("spinDay" in body)
-          p.spinDay = Math.min(31, Math.max(1, Math.trunc(Number(body.spinDay)) || 25));
+          p.spinDay = Math.min(31, Math.max(1, Math.trunc(Number(body["spinDay"])) || 25));
         if ("openDays" in body)
-          p.openDays = Math.min(31, Math.max(0, Math.trunc(Number(body.openDays)) || 0));
+          p.openDays = Math.min(31, Math.max(0, Math.trunc(Number(body["openDays"])) || 0));
         if ("activeFrom" in body)
-          p.activeFrom = /^\d{4}-\d{2}-\d{2}$/.test(String(body.activeFrom || ""))
-            ? String(body.activeFrom)
+          p.activeFrom = /^\d{4}-\d{2}-\d{2}$/.test(String(body["activeFrom"] || ""))
+            ? String(body["activeFrom"])
             : "";
       }
       r = await sb.rpc("lucky_spin_admin_config", { p });
     } else if (op === "grant") {
       r = await sb.rpc("lucky_spin_admin_grant", {
-        p_user: String(body?.user || ""),
+        p_user: String(body["user"] || ""),
         p_by: admin,
-        p_note: body?.note ?? null,
-        p_count: Number(body?.count) || 1,
+        p_note: body["note"] ?? null,
+        p_count: Number(body["count"]) || 1,
       });
     } else if (op === "results") {
       r = await sb.rpc("lucky_spin_admin_results", {
-        p_user: body?.user ?? null,
-        p_limit: Number(body?.limit) || 100,
+        p_user: body["user"] ?? null,
+        p_limit: Number(body["limit"]) || 100,
       });
     } else if (op === "claim") {
       r = await sb.rpc("lucky_spin_admin_claim", {
-        p_id: Number(body?.id),
-        p_claimed: body?.claimed !== false,
+        p_id: Number(body["id"]),
+        p_claimed: body["claimed"] !== false,
       });
     } else return bad(404, "Không có chức năng này.");
 
