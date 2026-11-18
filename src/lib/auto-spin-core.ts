@@ -6,6 +6,7 @@
 //    POST /api/auto/spin/state   body {}                      -> trạng thái + 16 ô + kết quả (xem được cả khi đã quay)
 //    POST /api/auto/spin/draw    body {"platform":"pc"}       -> quay (máy chủ bốc giải)
 //  Admin (Bearer access_token admin):
+//    POST /api/auto/admin/spin/draw     body {}  -> admin quay thử KHÔNG GIỚI HẠN (bốc đúng tỉ lệ, không ghi lịch sử, không tính lượt / vé)
 //    POST /api/auto/admin/spin/config   body {} = đọc; {"spinDay":25,"openDays":0,"activeFrom":"2026-11-25","enabled":true} = đổi
 //    POST /api/auto/admin/spin/grant    body {"user":"abc","count":1,"note":"..."}   -> cấp vé quay thủ công
 //    POST /api/auto/admin/spin/results  body {"user":"abc"(tuỳ chọn),"limit":100}    -> lịch sử trúng thưởng
@@ -31,6 +32,7 @@ const bad = (status: number, error: string, extra: object = {}): Out => ({
 export const SPIN_ACTIONS = [
   "spin/state",
   "spin/draw",
+  "admin/spin/draw",
   "admin/spin/config",
   "admin/spin/grant",
   "admin/spin/results",
@@ -69,7 +71,9 @@ export async function handleSpin(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let r: any;
 
-    if (op === "config") {
+    if (op === "draw") {
+      r = await sb.rpc("lucky_spin_admin_draw");
+    } else if (op === "config") {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const p: any = {};
       if (body && typeof body === "object") {
