@@ -28,6 +28,10 @@
 //   /api/auto/admin/kick      { username }
 //   /api/auto/admin/settings  { registration_open?, contact?, pricing?, update_url?, pay_qr? }   (pricing / pay_qr là chuỗi lưu nguyên văn)
 //   /api/auto/admin/import    { records: [...] }        (nhập users.json cũ của app, chạy 1 lần)
+//
+// Vòng quay nhân phẩm (chi tiết trong auto-spin-core.ts):
+//   /api/auto/spin/state, /api/auto/spin/draw                          (thành viên)
+//   /api/auto/admin/spin/config | grant | results | claim              (admin)
 // ============================================================================
 
 import {
@@ -53,6 +57,7 @@ import {
   type AutoStatus,
   type LegacyRecord,
 } from "@/lib/auto-auth-core";
+import { handleSpin } from "@/lib/auto-spin-core";
 
 const API_PREFIX = "/api/auto/";
 
@@ -213,6 +218,17 @@ export async function handleAutoApiRequest(request: Request): Promise<Response |
             (Array.isArray(body["records"]) ? body["records"] : []) as LegacyRecord[],
           ),
         );
+
+      // Vòng quay nhân phẩm - xem src/lib/auto-spin-core.ts
+      case "spin/state":
+      case "spin/draw":
+      case "admin/spin/config":
+      case "admin/spin/grant":
+      case "admin/spin/results":
+      case "admin/spin/claim": {
+        const r = await handleSpin(action, token, body);
+        return jsonResponse(r.body, r.status);
+      }
 
       default:
         return jsonResponse({ ok: false, error: "Not Found" }, 404);

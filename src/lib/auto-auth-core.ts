@@ -1121,3 +1121,21 @@ export async function autoQuizSubmitCore(
   }
   return { ok: true, added, count: Object.keys(bank).length };
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// Vòng quay nhân phẩm — 2 hàm xác thực dùng cho src/lib/auto-spin-core.ts
+// ---------------------------------------------------------------------------------------------------------------
+/** Token thành viên -> username chữ thường; null nếu token sai / không còn là thành viên. */
+export async function autoSpinMemberUser(accessToken: string): Promise<string | null> {
+  const who = await requireMember(accessToken);
+  return who.ok ? who.member.username.trim().toLowerCase() : null;
+}
+
+/** Token admin -> email admin; null nếu không phải admin. */
+export async function autoSpinAdminName(accessToken: string): Promise<string | null> {
+  const ok = await requireCallerIsAdmin(accessToken);
+  if (!ok.ok) return null;
+  const sb = await db();
+  const { data: ud } = await sb.auth.getUser(accessToken);
+  return ud?.user?.email ?? "admin";
+}
