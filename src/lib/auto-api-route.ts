@@ -31,7 +31,7 @@
 //
 // Vòng quay nhân phẩm (chi tiết trong auto-spin-core.ts):
 //   /api/auto/spin/state, /api/auto/spin/draw                          (thành viên)
-//   /api/auto/admin/spin/draw | config | grant | results | claim      (admin; draw = quay thử không giới hạn)
+//   /api/auto/admin/spin/draw | config | grant | results | claim | delete      (admin; draw = quay thử không giới hạn)
 // ============================================================================
 
 import {
@@ -226,7 +226,8 @@ export async function handleAutoApiRequest(request: Request): Promise<Response |
       case "admin/spin/config":
       case "admin/spin/grant":
       case "admin/spin/results":
-      case "admin/spin/claim": {
+      case "admin/spin/claim":
+      case "admin/spin/delete": {
         const r = await handleSpin(action, token, body);
         return jsonResponse(r.body, r.status);
       }

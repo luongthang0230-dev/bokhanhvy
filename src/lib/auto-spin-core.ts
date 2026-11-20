@@ -11,6 +11,7 @@
 //    POST /api/auto/admin/spin/grant    body {"user":"abc","count":1,"note":"..."}   -> cấp vé quay thủ công
 //    POST /api/auto/admin/spin/results  body {"user":"abc"(tuỳ chọn),"limit":100}    -> lịch sử trúng thưởng
 //    POST /api/auto/admin/spin/claim    body {"id":123,"claimed":true}               -> đánh dấu đã trao thưởng
+//    POST /api/auto/admin/spin/delete   body {"ids":[1,2]} | {"all":true,"user":"abc"(tuỳ chọn)} -> xoá (ẩn) dòng lịch sử; KHÔNG mở lại lượt quay
 
 import { autoSpinMemberUser, autoSpinAdminName } from "@/lib/auto-auth-core";
 
@@ -37,6 +38,7 @@ export const SPIN_ACTIONS = [
   "admin/spin/grant",
   "admin/spin/results",
   "admin/spin/claim",
+  "admin/spin/delete",
 ] as const;
 
 export async function handleSpin(
@@ -104,6 +106,15 @@ export async function handleSpin(
       r = await sb.rpc("lucky_spin_admin_claim", {
         p_id: Number(body["id"]),
         p_claimed: body["claimed"] !== false,
+      });
+    } else if (op === "delete") {
+      const ids = (Array.isArray(body["ids"]) ? body["ids"] : [])
+        .map((x) => Number(x))
+        .filter((x) => Number.isFinite(x) && x > 0);
+      r = await sb.rpc("lucky_spin_admin_delete", {
+        p_ids: ids.length ? ids : null,
+        p_all: body["all"] === true,
+        p_user: body["user"] ? String(body["user"]) : null,
       });
     } else return bad(404, "Không có chức năng này.");
 
