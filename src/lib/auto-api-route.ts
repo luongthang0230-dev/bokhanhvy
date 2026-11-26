@@ -11,7 +11,7 @@
 //   /api/auto/refresh         { refresh_token }          -> { ok, access_token, refresh_token }   (thành viên lẫn admin)
 //
 // Thành viên (Header "Authorization: Bearer <access_token>")
-//   /api/auto/me              {}                         -> { ok, role, message, profile, server_time, contact, pricing, update_url }
+//   /api/auto/me              {}                         -> { ok, role, message, profile, server_time, contact, update_url }   (KHÔNG kèm bảng giá: tiết kiệm băng thông, bảng giá lấy ở login / status)
 //   /api/auto/session/acquire { device, host, ver }      -> { ok } | { ok:false, code:"busy", error }
 //   /api/auto/session/check   { device, host, ver }      -> { ok, state: "ok" | "kicked" }
 //   /api/auto/session/release { device }                 -> { ok }
@@ -31,7 +31,7 @@
 //
 // Vòng quay nhân phẩm (chi tiết trong auto-spin-core.ts):
 //   /api/auto/spin/state, /api/auto/spin/draw                          (thành viên)
-//   /api/auto/admin/spin/draw | config | grant | results | claim | delete      (admin; draw = quay thử không giới hạn)
+//   /api/auto/admin/spin/draw | config | prizes | grant | results | claim | delete      (admin; draw = quay thử không giới hạn)
 // ============================================================================
 
 import {
@@ -224,6 +224,7 @@ export async function handleAutoApiRequest(request: Request): Promise<Response |
       case "spin/draw":
       case "admin/spin/draw":
       case "admin/spin/config":
+      case "admin/spin/prizes":
       case "admin/spin/grant":
       case "admin/spin/results":
       case "admin/spin/claim":

@@ -234,18 +234,39 @@ function profileOf(m: MemberDb): AutoProfile {
   };
 }
 
-async function getSettingsCore(): Promise<AutoSettings> {
-  const sb = await db();
-  const { data } = await sb.from("auto_settings").select("key,value");
-  const map = new Map<string, unknown>(
-    (data ?? []).map((r: { key: string; value: unknown }) => [r.key, r.value]),
-  );
+// Cài đặt (auto_settings) được đọc từ Supabase RẤT thường xuyên (mỗi lần đăng nhập / làm mới hạn / xin phiên). Bảng giá có thể tới 200 KB và ảnh QR tới 1,5 MB,
+// nên: (1) chỉ đọc những khoá thật sự cần, (2) nhớ trong bộ nhớ SETTINGS_TTL_MS (QR gấp đôi) (admin đổi cài đặt thì xoá nhớ ngay) -> giảm mạnh băng thông (egress) Supabase.
+const SETTINGS_TTL_MS = 300000; // 5 phút (cài đặt hiếm khi đổi)
+const _settingsMem = new Map<string, { at: number; v: unknown }>();
+export function autoSettingsClearCache() {
+  _settingsMem.clear();
+}
+async function getSettingsCore(opts: { pricing?: boolean; qr?: boolean } = {}): Promise<AutoSettings> {
+  const keys = ["registration_open", "contact", "update_url"];
+  if (opts.pricing) keys.push("pricing");
+  if (opts.qr) keys.push("pay_qr");
+  const nowMs = Date.now();
+  const missing = keys.filter((k) => {
+    const c = _settingsMem.get(k);
+    return !c || nowMs - c.at > (k === "pay_qr" ? SETTINGS_TTL_MS * 2 : SETTINGS_TTL_MS);
+  });
+  if (missing.length) {
+    const sb = await db();
+    const { data, error } = await sb.from("auto_settings").select("key,value").in("key", missing);
+    if (!error) {
+      const got = new Map<string, unknown>(
+        (data ?? []).map((r: { key: string; value: unknown }) => [r.key, r.value]),
+      );
+      for (const k of missing) _settingsMem.set(k, { at: nowMs, v: got.get(k) }); // khoá chưa có trong bảng cũng được nhớ (undefined)
+    }
+  }
+  const g = (k: string) => _settingsMem.get(k)?.v;
   return {
-    registration_open: map.get("registration_open") === true, // mặc định ĐÓNG (giống app cũ)
-    contact: typeof map.get("contact") === "string" ? (map.get("contact") as string) : "",
-    pricing: typeof map.get("pricing") === "string" ? (map.get("pricing") as string) : "",
-    update_url: typeof map.get("update_url") === "string" ? (map.get("update_url") as string) : "",
-    pay_qr: typeof map.get("pay_qr") === "string" ? (map.get("pay_qr") as string) : "",
+    registration_open: g("registration_open") === true, // mặc định ĐÓNG (giống app cũ)
+    contact: typeof g("contact") === "string" ? (g("contact") as string) : "",
+    pricing: typeof g("pricing") === "string" ? (g("pricing") as string) : "",
+    update_url: typeof g("update_url") === "string" ? (g("update_url") as string) : "",
+    pay_qr: typeof g("pay_qr") === "string" ? (g("pay_qr") as string) : "",
   };
 }
 
@@ -348,7 +369,7 @@ export async function autoPublicStatusCore(): Promise<
     server_time: number;
   }>
 > {
-  const s = await getSettingsCore();
+  const s = await getSettingsCore({ pricing: true });
   return {
     ok: true,
     registration_open: s.registration_open,
@@ -477,7 +498,7 @@ export async function autoLoginCore(
     return { ok: false, error: /nhanh|quá/i.test(msg) ? msg : bad.error };
   }
 
-  const settings = await getSettingsCore();
+  const settings = await getSettingsCore({ pricing: true, qr: true });
   const ev = evaluate(m, settings.contact);
   if (ev.role !== "member") {
     // Bị chặn (hết hạn / vô hiệu hóa / chờ kích hoạt): trả lý do, KHÔNG phát token.
@@ -556,7 +577,6 @@ export async function autoMeCore(
       profile: AutoProfile;
       server_time: number;
       contact: string;
-      pricing: string;
       update_url: string;
     }>
   | Fail
@@ -572,7 +592,6 @@ export async function autoMeCore(
     profile: profileOf(who.member),
     server_time: nowS(),
     contact: settings.contact,
-    pricing: settings.pricing,
     update_url: settings.update_url,
   };
 }
@@ -770,7 +789,7 @@ export async function autoAdminListCore(
     byMember.set(s.member_id, arr);
   }
   const members = ((ms ?? []) as MemberDb[]).map((m) => toRow(m, byMember.get(m.id) ?? []));
-  return { ok: true, members, settings: await getSettingsCore(), server_time: nowS() };
+  return { ok: true, members, settings: await getSettingsCore({ pricing: true, qr: true }), server_time: nowS() };
 }
 
 export interface AutoCreateInput {
@@ -997,7 +1016,8 @@ export async function autoAdminSetSettingsCore(
     const { error } = await sb.from("auto_settings").upsert(rows);
     if (error) return { ok: false, error: error.message };
   }
-  return { ok: true, settings: await getSettingsCore() };
+  autoSettingsClearCache();
+  return { ok: true, settings: await getSettingsCore({ pricing: true, qr: true }) };
 }
 
 /** Một lần: nhập danh sách thành viên cũ (users.json của app, mật khẩu đã băm PBKDF2) lên web. */
@@ -1069,15 +1089,21 @@ async function requireMemberOrAdmin(accessToken: string): Promise<{ ok: true } |
   return requireCallerIsAdmin(accessToken);
 }
 
-async function readQuizBank(): Promise<Record<string, string>> {
+// Kho đáp án có thể rất lớn và app tải về định kỳ (quiz/get) -> nhớ trong bộ nhớ 5 phút cho quiz/get. quiz/submit LUÔN đọc mới từ DB (tránh ghi đè mất đáp án của người khác).
+let _quizMem: { at: number; v: Record<string, string> } | null = null;
+const QUIZ_MEM_TTL_MS = 300000;
+async function readQuizBank(fresh = true): Promise<Record<string, string>> {
+  if (!fresh && _quizMem && Date.now() - _quizMem.at < QUIZ_MEM_TTL_MS) return _quizMem.v;
   const sb = await db();
   const { data } = await sb.from("auto_settings").select("value").eq("key", "quiz_bank").maybeSingle();
   const v = (data as { value?: unknown } | null)?.value;
   if (v && typeof v === "object" && !Array.isArray(v)) {
     const out: Record<string, string> = {};
     for (const [k, a] of Object.entries(v as Record<string, unknown>)) if (typeof a === "string") out[k] = a;
+    _quizMem = { at: Date.now(), v: out };
     return out;
   }
+  _quizMem = { at: Date.now(), v: {} };
   return {};
 }
 
@@ -1086,7 +1112,7 @@ export async function autoQuizGetCore(
 ): Promise<Ok<{ bank: Record<string, string>; count: number }> | Fail> {
   const who = await requireMemberOrAdmin(accessToken);
   if (!who.ok) return who;
-  const bank = await readQuizBank();
+  const bank = await readQuizBank(false);
   return { ok: true, bank, count: Object.keys(bank).length };
 }
 
@@ -1118,6 +1144,7 @@ export async function autoQuizSubmitCore(
       .from("auto_settings")
       .upsert([{ key: "quiz_bank", value: bank, updated_at: new Date().toISOString() }]);
     if (error) return { ok: false, error: error.message };
+    _quizMem = { at: Date.now(), v: bank };
   }
   return { ok: true, added, count: Object.keys(bank).length };
 }

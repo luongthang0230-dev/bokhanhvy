@@ -8,6 +8,7 @@
 //  Admin (Bearer access_token admin):
 //    POST /api/auto/admin/spin/draw     body {}  -> admin quay thử KHÔNG GIỚI HẠN (bốc đúng tỉ lệ, không ghi lịch sử, không tính lượt / vé)
 //    POST /api/auto/admin/spin/config   body {} = đọc; {"spinDay":25,"openDays":0,"activeFrom":"2026-11-25","enabled":true} = đổi
+//    POST /api/auto/admin/spin/prizes   body {} = đọc; {"prizes":[{"id":1,"amount":5000,"percent":16.375},...]} = đặt lại số tiền / vàng + tỉ lệ (tổng phải = 100%)
 //    POST /api/auto/admin/spin/grant    body {"user":"abc","count":1,"note":"..."}   -> cấp vé quay thủ công
 //    POST /api/auto/admin/spin/results  body {"user":"abc"(tuỳ chọn),"limit":100}    -> lịch sử trúng thưởng
 //    POST /api/auto/admin/spin/claim    body {"id":123,"claimed":true}               -> đánh dấu đã trao thưởng
@@ -35,6 +36,7 @@ export const SPIN_ACTIONS = [
   "spin/draw",
   "admin/spin/draw",
   "admin/spin/config",
+  "admin/spin/prizes",
   "admin/spin/grant",
   "admin/spin/results",
   "admin/spin/claim",
@@ -90,6 +92,31 @@ export async function handleSpin(
             : "";
       }
       r = await sb.rpc("lucky_spin_admin_config", { p });
+    } else if (op === "prizes") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const list: any[] = [];
+      for (const it of Array.isArray(body["prizes"]) ? (body["prizes"] as unknown[]) : []) {
+        if (!it || typeof it !== "object") continue;
+        const o = it as Record<string, unknown>;
+        const id = Math.trunc(Number(o["id"]));
+        if (!Number.isFinite(id) || id < 1 || id > 99) return bad(400, "Số ô không hợp lệ.");
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const e: any = { id };
+        if ("amount" in o) {
+          const a = Math.trunc(Number(o["amount"]));
+          if (!Number.isFinite(a) || a < 1 || a > 1_000_000_000) return bad(400, `Số tiền / vàng của ô ${id} không hợp lệ.`);
+          e.amount = a;
+        }
+        if ("percent" in o) {
+          const pc = Number(o["percent"]);
+          if (!Number.isFinite(pc) || pc <= 0 || pc > 100) return bad(400, `Tỉ lệ của ô ${id} không hợp lệ.`);
+          e.percent = Math.round(pc * 1000) / 1000;
+        }
+        list.push(e);
+      }
+      if (list.length) r = await sb.rpc("lucky_spin_admin_prizes", { p: { prizes: list } });
+      else r = await sb.rpc("lucky_spin_admin_config", { p: {} }); // chỉ đọc: trả layout + prizes + totalPercent
+      if (!r.error && r.data && r.data.ok === false) return { status: 200, body: r.data };
     } else if (op === "grant") {
       r = await sb.rpc("lucky_spin_admin_grant", {
         p_user: String(body["user"] || ""),
